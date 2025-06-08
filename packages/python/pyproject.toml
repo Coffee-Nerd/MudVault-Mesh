@@ -1,0 +1,82 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mudvault-mesh"
+version = "1.0.0"
+description = "Python client library for connecting to MudVault Mesh network"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.8"
+authors = [
+    { name = "MudVault Team", email = "asmodeusbrooding@gmail.com" },
+]
+keywords = [
+    "mud",
+    "mudvault", 
+    "mesh",
+    "mmo",
+    "chat",
+    "imc",
+    "websocket",
+    "gaming",
+    "communication"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Games/Entertainment :: Multi-User Dungeons (MUD)",
+    "Topic :: Communications :: Chat",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
+dependencies = [
+    "websockets>=11.0",
+    "asyncio-mqtt>=0.11.0; python_version<'3.11'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "isort>=5.0",
+    "mypy>=1.0",
+    "flake8>=6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Coffee-Nerd/OpenIMC"
+Repository = "https://github.com/Coffee-Nerd/OpenIMC.git"
+Issues = "https://github.com/Coffee-Nerd/OpenIMC/issues"
+Documentation = "https://github.com/Coffee-Nerd/OpenIMC/docs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mudvault_mesh"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
