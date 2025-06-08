@@ -1,0 +1,51 @@
+# Example Makefile additions for OpenIMC integration
+# Add these lines to your existing MUD Makefile
+
+# OpenIMC source files
+OPENIMC_OBJS = openimc.o imc_commands.o websocket.o json_simple.o
+
+# Add to your existing OBJS line
+# OBJS = ... $(OPENIMC_OBJS)
+
+# Add OpenSSL library for WebSocket implementation
+# LIBS = ... -lssl -lcrypto
+
+# Dependencies for OpenIMC files
+openimc.o: openimc.c openimc.h imc_config.h
+	$(CC) $(CFLAGS) -c openimc.c
+
+imc_commands.o: imc_commands.c openimc.h
+	$(CC) $(CFLAGS) -c imc_commands.c
+
+websocket.o: websocket.c openimc.h
+	$(CC) $(CFLAGS) -c websocket.c
+
+json_simple.o: json_simple.c json.h openimc.h
+	$(CC) $(CFLAGS) -c json_simple.c
+
+# Clean rule addition
+# clean:
+#	rm -f *.o your_mud_executable $(OPENIMC_OBJS)
+
+# Example complete Makefile for CircleMUD:
+#
+# CC = gcc
+# CFLAGS = -g -O2 -Wall -Wno-unused-variable -Wno-unused-function
+# LIBS = -lcrypt -lssl -lcrypto
+# 
+# OBJFILES = comm.o act.comm.o act.informative.o act.movement.o act.item.o \
+#            act.offensive.o act.other.o act.social.o act.wizard.o ban.o \
+#            boards.o castle.o class.o config.o constants.o db.o fight.o \
+#            graph.o handler.o house.o interpreter.o limits.o magic.o \
+#            mail.o mobact.o modify.o objsave.o olc.o random.o shop.o \
+#            spec_assign.o spec_procs.o spell_parser.o spells.o utils.o \
+#            weather.o $(OPENIMC_OBJS)
+# 
+# circle: $(OBJFILES)
+#	$(CC) -o circle $(OBJFILES) $(LIBS)
+# 
+# clean:
+#	rm -f *.o circle
+#
+# .c.o:
+#	$(CC) $(CFLAGS) -c $<

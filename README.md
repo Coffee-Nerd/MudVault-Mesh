@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Discord](https://img.shields.io/discord/1234567890?color=7289da&logo=discord&logoColor=white)](https://discord.gg/r6kM56YrEV)
 [![Documentation](https://img.shields.io/badge/docs-wiki-blue)](https://github.com/openimc/openimc/wiki)
-[![GitHub Stars](https://img.shields.io/github/stars/openimc/openimc?style=social)](https://https://github.com/Coffee-Nerd/OpenIMC)
+[![GitHub Stars](https://img.shields.io/github/stars/openimc/openimc?style=social)](https://github.com/Coffee-Nerd/OpenIMC)
 
 **The next generation of MUD interconnectivity - built for the modern web**
 
