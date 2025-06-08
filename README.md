@@ -3,9 +3,9 @@
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Discord](https://img.shields.io/discord/1234567890?color=7289da&logo=discord&logoColor=white)](https://discord.gg/r6kM56YrEV)
-[![Documentation](https://img.shields.io/badge/docs-wiki-blue)](https://github.com/openimc/openimc/wiki)
-[![GitHub Stars](https://img.shields.io/github/stars/openimc/openimc?style=social)](https://github.com/Coffee-Nerd/OpenIMC)
+[![GitHub Stars](https://img.shields.io/github/stars/Coffee-Nerd/OpenIMC?style=social)](https://github.com/Coffee-Nerd/OpenIMC)
+[![Issues](https://img.shields.io/github/issues/Coffee-Nerd/OpenIMC)](https://github.com/Coffee-Nerd/OpenIMC/issues)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/Coffee-Nerd/OpenIMC)
 
 **The next generation of MUD interconnectivity - built for the modern web**
 
@@ -212,9 +212,8 @@ npm run dev
 
 Join our growing community of MUD developers and administrators working to modernize inter-MUD communication.
 
-- **Discord**: [Join our server](https://discord.gg/r6kM56YrEV)
-- **Email**: asmodeusbrooding@gmail.com
 - **GitHub**: [Discussions](https://github.com/Coffee-Nerd/OpenIMC/discussions)
+- **Email**: asmodeusbrooding@gmail.com
 
 ## 🛠️ Built With
 
@@ -247,7 +246,7 @@ OpenIMC is in active development. We're building the foundation for the next gen
 
 ## 📞 Contact & Support
 
-- **Discord**: [Join our community](https://discord.gg/r6kM56YrEV)
+- **GitHub**: [Start a discussion](https://github.com/Coffee-Nerd/OpenIMC/discussions)
 - **Email**: asmodeusbrooding@gmail.com
 - **GitHub Issues**: [Report bugs or request features](https://github.com/Coffee-Nerd/OpenIMC/issues)
 
@@ -257,7 +256,7 @@ OpenIMC is in active development. We're building the foundation for the next gen
 
 **Ready to modernize your MUD's connectivity?**
 
-[Get Started](#quick-start) • [Join Discord](https://discord.gg/r6kM56YrEV) • [Contribute](#contributing)
+[Get Started](#quick-start) • [GitHub Discussions](https://github.com/Coffee-Nerd/OpenIMC/discussions) • [Contribute](#contributing)
 
 Made with ❤️ by the MUD community, for the MUD community
 
