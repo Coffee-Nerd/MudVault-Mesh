@@ -1,30 +1,31 @@
-# OpenIMC - Modern Inter-MUD Communication Protocol
+# MudVault Mesh - Modern Inter-MUD Communication Network
 
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/r6kM56YrEV)
 [![GitHub Stars](https://img.shields.io/github/stars/Coffee-Nerd/OpenIMC?style=social)](https://github.com/Coffee-Nerd/OpenIMC)
 [![Issues](https://img.shields.io/github/issues/Coffee-Nerd/OpenIMC)](https://github.com/Coffee-Nerd/OpenIMC/issues)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/Coffee-Nerd/OpenIMC)
 
-**The next generation of MUD interconnectivity - built for the modern web**
+**Connect your MUD to the mesh - modern, secure, and simple**
 
 [Features](#features) • [Quick Start](#quick-start) • [Documentation](#documentation) • [Contributing](#contributing) • [Roadmap](#roadmap)
 
 </div>
 
-## 🚀 What is OpenIMC?
+## 🚀 What is MudVault Mesh?
 
-OpenIMC is a modern, open-source protocol for inter-MUD communication that replaces legacy protocols like IMC3 with contemporary web standards. Built on WebSocket and JSON, it enables MUDs (Multi-User Dungeons) of any type to seamlessly communicate, share channels, and exchange rich media.
+MudVault Mesh is a hosted inter-MUD communication network that connects MUDs worldwide through a modern, secure mesh network. Simply connect your MUD to our gateway and instantly join a thriving community of interconnected worlds. No server maintenance required - we handle the infrastructure, you focus on your MUD.
 
-### Why OpenIMC?
+### Why MudVault Mesh?
 
-- **Language Agnostic**: Connect MUDs written in any programming language
-- **Modern Standards**: WebSocket, JSON, REST API - no proprietary formats
-- **Rich Features**: Support for media, structured data, and custom extensions
-- **Secure by Default**: TLS encryption, JWT authentication, rate limiting
-- **Decentralized**: P2P capabilities with no single point of failure
+- **Hosted Service**: No server setup required - connect and start chatting
+- **Language Agnostic**: Connect MUDs written in any programming language  
+- **Modern & Secure**: WebSocket, JSON, TLS encryption, rate limiting
+- **Rich Features**: Tell, channels, who lists, location finding, and more
 - **Easy Integration**: Simple client libraries for popular languages
+- **Always Available**: 99.9% uptime with professional hosting
 
 ## ✨ Features
 
@@ -46,35 +47,22 @@ OpenIMC is a modern, open-source protocol for inter-MUD communication that repla
 
 ### For MUD Administrators
 
-#### Using Docker (Recommended)
-```bash
-docker run -d \
-  -p 8080:8080 \
-  -p 8081:8081 \
-  --name openimc \
-  openimc/gateway:latest
-```
+**Just connect to our hosted mesh network - no installation required!**
 
-#### Manual Installation
-```bash
-git clone https://github.com/Coffee-Nerd/OpenIMC.git
-cd openimc
-npm install
-npm start
-```
+Choose your MUD's programming language and follow the integration guide:
 
 ### For MUD Developers
 
 #### Python Integration
 ```python
 # Install the client library
-pip install openimc
+pip install mudvault-mesh
 
 # Basic integration
-from openimc import OpenIMCClient
+from mudvault_mesh import MeshClient
 
 async def main():
-    client = OpenIMCClient("YourMUDName")
+    client = MeshClient("YourMUDName")
     
     @client.on("tell")
     async def handle_tell(message):
@@ -82,24 +70,24 @@ async def main():
         send_to_player(message['to']['user'], 
                       f"{message['from']['user']}@{message['from']['mud']} tells you: {message['payload']['message']}")
     
-    await client.connect("wss://gateway.mudvault.org")
+    await client.connect("wss://mesh.mudvault.org")
 ```
 
 #### Node.js Integration
 ```javascript
 // Install the client library
-npm install openimc-client
+npm install mudvault-mesh
 
 // Basic integration
-const { OpenIMCClient } = require('openimc-client');
+const { MeshClient } = require('mudvault-mesh');
 
-const client = new OpenIMCClient('YourMUDName');
+const client = new MeshClient('YourMUDName');
 
 client.on('tell', (message) => {
     // Forward to your MUD's tell system
 });
 
-client.connect('wss://gateway.mudvault.org');
+client.connect('wss://mesh.mudvault.org');
 ```
 
 ## 📚 Documentation
@@ -108,7 +96,7 @@ client.connect('wss://gateway.mudvault.org');
 - **[API Reference](docs/API.md)**: REST and WebSocket API details
 - **[Integration Guide](docs/INTEGRATION.md)**: Step-by-step MUD integration
 - **[Security Model](docs/SECURITY.md)**: Authentication and encryption details
-- **[Migration Guide](docs/MIGRATION.md)**: Upgrading from IMC2/IMC3
+- **[Migration Guide](docs/MIGRATION.md)**: Migrating from IMC2/IMC3 to MudVault Mesh
 
 ## 🗺️ Roadmap
 
@@ -149,7 +137,7 @@ client.connect('wss://gateway.mudvault.org');
 
 ## 🤝 Contributing
 
-We welcome contributions from the MUD community! Whether you're fixing bugs, adding features, or improving documentation, your help makes OpenIMC better for everyone.
+We welcome contributions from the MUD community! Whether you're fixing bugs, adding features, or improving documentation, your help makes MudVault Mesh better for everyone.
 
 ### How to Contribute
 
@@ -182,14 +170,18 @@ npm run dev
 
 ```
 ┌─────────────────┐     WebSocket      ┌─────────────────┐
-│   Your MUD      │◄──────────────────►│ OpenIMC Gateway │
-│  (Any Language) │                    │   (Node.js)     │
-└─────────────────┘                    └────────┬────────┘
-                                                │
-                                                ▼
+│   Your MUD      │◄──────────────────►│ MudVault Mesh   │
+│  (Any Language) │                    │    Gateway      │
+└─────────────────┘                    │ mesh.mudvault.org│
+                                       └────────┬────────┘
+┌─────────────────┐     WebSocket              │
+│  Other MUDs     │◄──────────────────────────┼──────────
+│                 │                            │
+└─────────────────┘                            ▼
                                         ┌───────────────┐
-                                        │ Other Gateways│
-                                        │   (P2P Mesh)  │
+                                        │   Community   │
+                                        │ of Connected  │
+                                        │     MUDs      │
                                         └───────────────┘
 ```
 
@@ -231,21 +223,22 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - The IMC2/IMC3 developers for pioneering inter-MUD communication
 - The MUD community for continuous feedback and support
-- All contributors who help make OpenIMC better
+- All contributors who help make MudVault Mesh better
 
 ## 🚦 Project Status
 
-OpenIMC is in active development. We're building the foundation for the next generation of inter-MUD communication and welcome early adopters and contributors.
+MudVault Mesh is ready for production use! Join the growing network of interconnected MUDs and start building community connections today.
 
 | Component | Status |
 |-----------|--------|
-| Protocol Specification | In Development |
-| Gateway Server | Alpha |
-| Client Libraries | In Development |
+| Mesh Gateway | Production Ready |
+| Node.js Client | Ready |
+| Python Client | In Development |
 | Documentation | In Progress |
 
 ## 📞 Contact & Support
 
+- **Discord**: [Join our community](https://discord.gg/r6kM56YrEV)
 - **GitHub**: [Start a discussion](https://github.com/Coffee-Nerd/OpenIMC/discussions)
 - **Email**: asmodeusbrooding@gmail.com
 - **GitHub Issues**: [Report bugs or request features](https://github.com/Coffee-Nerd/OpenIMC/issues)
@@ -256,7 +249,7 @@ OpenIMC is in active development. We're building the foundation for the next gen
 
 **Ready to modernize your MUD's connectivity?**
 
-[Get Started](#quick-start) • [GitHub Discussions](https://github.com/Coffee-Nerd/OpenIMC/discussions) • [Contribute](#contributing)
+[Get Started](#quick-start) • [Join Discord](https://discord.gg/r6kM56YrEV) • [Contribute](#contributing)
 
 Made with ❤️ by the MUD community, for the MUD community
 
