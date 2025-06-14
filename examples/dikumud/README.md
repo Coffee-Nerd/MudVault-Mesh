@@ -1,6 +1,6 @@
-# DikuMUD/Merc Integration with OpenIMC
+# DikuMUD/Merc Integration with MudVault Mesh
 
-This example shows how to integrate your DikuMUD or CircleMUD-based MUD with the OpenIMC network for inter-MUD communication.
+This example shows how to integrate your DikuMUD or CircleMUD-based MUD with the MudVault Mesh network for inter-MUD communication.
 
 ## Quick Start
 
@@ -11,10 +11,10 @@ This example shows how to integrate your DikuMUD or CircleMUD-based MUD with the
 
 ## Files Included
 
-- `openimc.h` - Header file with structures and function declarations
-- `openimc.c` - Core OpenIMC integration code
-- `imc_commands.c` - Player commands (tell, who, finger, etc.)
-- `imc_config.h` - Configuration settings
+- `mudvault_mesh.h` - Header file with structures and function declarations
+- `mudvault_mesh.c` - Core MudVault Mesh integration code
+- `mvm_commands.c` - Player commands (mvm tell, mvm who, etc.)
+- `mvm_config.h` - Configuration settings
 - `Makefile.example` - Example Makefile additions
 
 ## Installation Steps
@@ -33,26 +33,26 @@ cp examples/dikumud/*.h src/
 Add to your `src/Makefile`:
 
 ```makefile
-# OpenIMC Integration
-OPENIMC_OBJS = openimc.o imc_commands.o
+# MudVault Mesh Integration
+MVM_OBJS = mudvault_mesh.o mvm_commands.o
 
 # Add to your existing OBJS line
-OBJS = ... $(OPENIMC_OBJS)
+OBJS = ... $(MVM_OBJS)
 
 # Add dependencies
-openimc.o: openimc.c openimc.h imc_config.h
-imc_commands.o: imc_commands.c openimc.h
+mudvault_mesh.o: mudvault_mesh.c mudvault_mesh.h mvm_config.h
+mvm_commands.o: mvm_commands.c mudvault_mesh.h
 ```
 
 ### 3. Configuration
 
-Edit `imc_config.h` with your MUD's settings:
+Edit `mvm_config.h` with your MUD's settings:
 
 ```c
-#define IMC_MUD_NAME     "YourMUDName"      // Must be unique
-#define IMC_GATEWAY_HOST "mudvault.org"     // Or your gateway
-#define IMC_GATEWAY_PORT 8081               // WebSocket port
-#define IMC_API_KEY      "your-api-key"     // Get from registration
+#define MVM_MUD_NAME     "YourMUDName"          // Must be unique
+#define MVM_GATEWAY_HOST "mesh.mudvault.org"    // MudVault Mesh gateway
+#define MVM_GATEWAY_PORT 8081                   // WebSocket port
+#define MVM_API_KEY      "your-api-key"         // Get from registration
 ```
 
 ### 4. Add to main.c
@@ -60,31 +60,33 @@ Edit `imc_config.h` with your MUD's settings:
 Add these includes and calls to your main game loop:
 
 ```c
-#include "openimc.h"
+#include "mudvault_mesh.h"
 
 // In main() function, after other initializations:
-if (imc_startup() < 0) {
-    log("SYSERR: Could not initialize OpenIMC");
+if (mvm_startup() < 0) {
+    log("SYSERR: Could not initialize MudVault Mesh");
     exit(1);
 }
 
 // In your main game loop (usually in comm.c):
-imc_loop();
+mvm_loop();
 
 // In shutdown sequence:
-imc_shutdown();
+mvm_shutdown();
 ```
 
 ### 5. Add Commands
 
-Add command entries to your command table (usually in interpreter.c):
+Add command entry to your command table (usually in interpreter.c):
 
 ```c
-{ "imctell"  , POS_SLEEPING, do_imctell  , 0, 0 },
-{ "imcwho"   , POS_SLEEPING, do_imcwho   , 0, 0 },
-{ "imcfinger", POS_SLEEPING, do_imcfinger, 0, 0 },
-{ "channels" , POS_SLEEPING, do_channels , 0, 0 },
-{ "imclist"  , POS_SLEEPING, do_imclist  , 0, 0 },
+{ "mvm"      , POS_SLEEPING, do_mvm      , 0, 0 },
+```
+
+**Optional channel aliases** (add these if you want quick channel access):
+```c
+{ "gossip"   , POS_SLEEPING, do_gossip   , 0, 0 },
+{ "ooc"      , POS_SLEEPING, do_ooc      , 0, 0 },
 ```
 
 ### 6. Player Events
@@ -93,57 +95,54 @@ Add these calls where appropriate in your MUD:
 
 ```c
 // When player logs in:
-imc_player_login(ch);
+mvm_player_login(ch);
 
 // When player logs out:
-imc_player_logout(ch);
+mvm_player_logout(ch);
 
 // When player changes rooms:
-imc_player_moved(ch, from_room, to_room);
+mvm_player_moved(ch, from_room, to_room);
 
 // When player goes idle/unidle:
-imc_player_idle(ch, idle_time);
+mvm_player_idle(ch, idle_time);
 ```
 
 ## Registration
 
-Before connecting, register your MUD with the OpenIMC network:
+Before connecting, register your MUD with the MudVault Mesh network:
 
 ```bash
-curl -X POST https://mudvault.org/api/v1/auth/register \
+curl -X POST https://mesh.mudvault.org/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
-    "mudName": "YourMUDName",
+    "mudName": "YourMUDName", 
     "adminEmail": "admin@yourmud.com"
   }'
 ```
 
-Save the returned API key and add it to `imc_config.h`.
+Save the returned API key and add it to `mvm_config.h`.
 
 ## Player Commands
 
 Once integrated, players can use these commands:
 
-### Inter-MUD Communication
+### MudVault Mesh Commands
 ```
-imctell player@mudname message   - Send tell to player on another MUD
-imcwho mudname                   - See who's online on another MUD  
-imcfinger player@mudname         - Get info about a player
-imclocate player                 - Find which MUD a player is on
-```
-
-### Channels
-```
-channels                         - List available channels
-channel gossip Hello everyone!   - Send message to gossip channel
-chjoin gossip                    - Join the gossip channel
-chleave gossip                   - Leave the gossip channel
+mvm tell player@mudname message  - Send tell to player on another MUD
+mvm who [mudname]                - See who's online (all MUDs or specific MUD)
+mvm finger player@mudname        - Get info about a player
+mvm locate player                - Find which MUD a player is on
+mvm channels                     - List available channels  
+mvm join channel                 - Join a channel
+mvm leave channel                - Leave a channel
+mvm list                         - List connected MUDs
+mvm stats                        - Show mesh statistics
 ```
 
-### Information
+### Channel Shortcuts (optional aliases)
 ```
-imclist                          - List connected MUDs
-imcstats                         - Show IMC statistics
+gossip message                   - Send to gossip channel (if aliased)
+ooc message                      - Send to OOC channel (if aliased)
 ```
 
 ## Advanced Features
