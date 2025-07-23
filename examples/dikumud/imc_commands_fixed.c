@@ -1,7 +1,7 @@
 /*
- * OpenIMC Player Commands for DikuMUD/Merc
+ * MudVault Mesh Player Commands for DikuMUD/Merc
  * 
- * This file contains all the player commands for OpenIMC functionality.
+ * This file contains all the player commands for MudVault Mesh functionality.
  * Add these command functions to your MUD's command table.
  */
 
@@ -12,7 +12,7 @@
 #include "interpreter.h"
 #include "handler.h"
 #include "db.h"
-#include "openimc.h"
+#include "mudvault_mesh.h"
 
 /* =================================================================== */
 /* COMMAND FUNCTION DECLARATIONS                                      */
@@ -51,7 +51,7 @@ DO_FUN(do_imctell) {
     char *at_pos, *mudname, *username;
     
     if (!IMC_IS_CONNECTED()) {
-        send_to_char("OpenIMC is not connected.\n\r", ch);
+        send_to_char("MudVault Mesh is not connected.\n\r", ch);
         return;
     }
     
@@ -125,7 +125,7 @@ DO_FUN(do_imcemote) {
     char mudname[MAX_INPUT_LENGTH], action[MAX_INPUT_LENGTH];
     
     if (!IMC_IS_CONNECTED()) {
-        send_to_char("OpenIMC is not connected.\n\r", ch);
+        send_to_char("MudVault Mesh is not connected.\n\r", ch);
         return;
     }
     
@@ -165,7 +165,7 @@ DO_FUN(do_imcwho) {
     char mudname[MAX_INPUT_LENGTH];
     
     if (!IMC_IS_CONNECTED()) {
-        send_to_char("OpenIMC is not connected.\n\r", ch);
+        send_to_char("MudVault Mesh is not connected.\n\r", ch);
         return;
     }
     
@@ -208,7 +208,7 @@ DO_FUN(do_imcfinger) {
     char *at_pos, *mudname, *username;
     
     if (!IMC_IS_CONNECTED()) {
-        send_to_char("OpenIMC is not connected.\n\r", ch);
+        send_to_char("MudVault Mesh is not connected.\n\r", ch);
         return;
     }
     
@@ -254,7 +254,7 @@ DO_FUN(do_imclocate) {
     char username[MAX_INPUT_LENGTH];
     
     if (!IMC_IS_CONNECTED()) {
-        send_to_char("OpenIMC is not connected.\n\r", ch);
+        send_to_char("MudVault Mesh is not connected.\n\r", ch);
         return;
     }
     
@@ -282,7 +282,7 @@ DO_FUN(do_imclocate) {
  */
 DO_FUN(do_imclist) {
     if (!IMC_IS_CONNECTED()) {
-        send_to_char("OpenIMC is not connected.\n\r", ch);
+        send_to_char("MudVault Mesh is not connected.\n\r", ch);
         return;
     }
     
@@ -300,11 +300,11 @@ DO_FUN(do_imcstats) {
     int hours, minutes, seconds;
     
     if (!imc_data) {
-        send_to_char("OpenIMC is not initialized.\n\r", ch);
+        send_to_char("MudVault Mesh is not initialized.\n\r", ch);
         return;
     }
     
-    send_to_char("OpenIMC Status:\n\r", ch);
+    send_to_char("MudVault Mesh Status:\n\r", ch);
     send_to_char("===============\n\r", ch);
     
     sprintf(buf, "State: %s\n\r", 
@@ -355,7 +355,7 @@ DO_FUN(do_imcstats) {
  */
 DO_FUN(do_channels) {
     if (!IMC_IS_CONNECTED()) {
-        send_to_char("OpenIMC is not connected.\n\r", ch);
+        send_to_char("MudVault Mesh is not connected.\n\r", ch);
         return;
     }
     
@@ -364,7 +364,7 @@ DO_FUN(do_channels) {
         return;
     }
     
-    send_to_char("Available IMC Channels:\n\r", ch);
+    send_to_char("Available Mesh Channels:\n\r", ch);
     send_to_char("=======================\n\r", ch);
     
     imc_list_channels(ch);
@@ -377,7 +377,7 @@ DO_FUN(do_channel) {
     char channel_name[MAX_INPUT_LENGTH], message[MAX_INPUT_LENGTH];
     
     if (!IMC_IS_CONNECTED()) {
-        send_to_char("OpenIMC is not connected.\n\r", ch);
+        send_to_char("MudVault Mesh is not connected.\n\r", ch);
         return;
     }
     
@@ -432,7 +432,7 @@ DO_FUN(do_chjoin) {
     char channel_name[MAX_INPUT_LENGTH];
     
     if (!IMC_IS_CONNECTED()) {
-        send_to_char("OpenIMC is not connected.\n\r", ch);
+        send_to_char("MudVault Mesh is not connected.\n\r", ch);
         return;
     }
     
@@ -475,7 +475,7 @@ DO_FUN(do_chleave) {
     char channel_name[MAX_INPUT_LENGTH];
     
     if (!IMC_IS_CONNECTED()) {
-        send_to_char("OpenIMC is not connected.\n\r", ch);
+        send_to_char("MudVault Mesh is not connected.\n\r", ch);
         return;
     }
     
@@ -509,7 +509,7 @@ DO_FUN(do_chleave) {
  * imchelp - Show IMC help
  */
 DO_FUN(do_imchelp) {
-    send_to_char("OpenIMC Commands:\n\r", ch);
+    send_to_char("MudVault Mesh Commands:\n\r", ch);
     send_to_char("=================\n\r\n\r", ch);
     
     send_to_char("Communication:\n\r", ch);

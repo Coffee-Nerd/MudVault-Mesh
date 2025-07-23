@@ -55,10 +55,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Coffee-Nerd/OpenIMC"
-Repository = "https://github.com/Coffee-Nerd/OpenIMC.git"
-Issues = "https://github.com/Coffee-Nerd/OpenIMC/issues"
-Documentation = "https://github.com/Coffee-Nerd/OpenIMC/docs"
+Homepage = "https://github.com/Coffee-Nerd/MudVault-Mesh"
+Repository = "https://github.com/Coffee-Nerd/MudVault-Mesh.git"
+Issues = "https://github.com/Coffee-Nerd/MudVault-Mesh/issues"
+Documentation = "https://github.com/Coffee-Nerd/MudVault-Mesh/docs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["mudvault_mesh"]

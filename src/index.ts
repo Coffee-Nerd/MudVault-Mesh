@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { Gateway } from './services/gateway';
+import { DiscordService } from './services/discord';
 import apiRoutes from './routes/api';
 import redisService from './services/redis';
 import userService from './services/user';
@@ -52,10 +53,10 @@ app.use('/api/v1', apiRoutes);
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    name: 'OpenIMC Gateway',
+    name: 'MudVault Mesh Gateway',
     version: '1.0.0',
     description: 'Modern Inter-MUD Communication Protocol Gateway',
-    documentation: 'https://github.com/Coffee-Nerd/OpenIMC',
+    documentation: 'https://github.com/Coffee-Nerd/MudVault-Mesh',
     endpoints: {
       api: '/api/v1',
       websocket: `ws://localhost:${WS_PORT}`,
@@ -96,7 +97,7 @@ app.use((error: Error, req: express.Request, res: express.Response, next: expres
 // Initialize services and start server
 async function startServer() {
   try {
-    logger.info('Starting OpenIMC Gateway...');
+    logger.info('Starting MudVault Mesh Gateway...');
 
     // Connect to Redis
     logger.info('Connecting to Redis...');
@@ -109,6 +110,26 @@ async function startServer() {
     // Start WebSocket gateway
     logger.info(`Starting WebSocket gateway on port ${WS_PORT}...`);
     const gateway = new Gateway(WS_PORT);
+
+    // Initialize Discord service if enabled
+    let discordService: DiscordService | null = null;
+    if (process.env.DISCORD_ENABLED === 'true') {
+      logger.info('Initializing Discord service...');
+      const discordConfig = {
+        enabled: true,
+        token: process.env.DISCORD_TOKEN!,
+        guildId: process.env.DISCORD_GUILD_ID!,
+        bridgeChannelId: process.env.DISCORD_BRIDGE_CHANNEL_ID!,
+        mudName: process.env.DISCORD_MUD_NAME || 'DiscordBridge',
+        channels: (process.env.DISCORD_CHANNELS || 'ooc,chat').split(','),
+        requireVerification: process.env.DISCORD_REQUIRE_VERIFICATION === 'true',
+        rateLimitMessages: parseInt(process.env.DISCORD_RATE_LIMIT_MESSAGES || '10'),
+        rateLimitCommands: parseInt(process.env.DISCORD_RATE_LIMIT_COMMANDS || '5')
+      };
+
+      discordService = new DiscordService(discordConfig, logger, `ws://localhost:${WS_PORT}`);
+      await discordService.start();
+    }
     
     // Set up gateway event handlers
     gateway.on('mudConnected', ({ mudName, connectionId }) => {
@@ -139,10 +160,10 @@ async function startServer() {
     // Start HTTP server
     logger.info(`Starting HTTP server on port ${PORT}...`);
     const server = app.listen(PORT, () => {
-      logger.info(`✅ OpenIMC Gateway started successfully!`);
+      logger.info(`✅ MudVault Mesh Gateway started successfully!`);
       logger.info(`🌐 HTTP API: http://localhost:${PORT}`);
       logger.info(`🔌 WebSocket: ws://localhost:${WS_PORT}`);
-      logger.info(`📖 Documentation: https://github.com/Coffee-Nerd/OpenIMC`);
+      logger.info(`📖 Documentation: https://github.com/Coffee-Nerd/MudVault-Mesh`);
     });
 
     // Graceful shutdown
@@ -156,6 +177,11 @@ async function startServer() {
       try {
         await gateway.close();
         logger.info('WebSocket gateway closed');
+
+        if (discordService) {
+          await discordService.stop();
+          logger.info('Discord service stopped');
+        }
         
         await redisService.disconnect();
         logger.info('Redis connection closed');

@@ -223,10 +223,10 @@ This will log all IMC activity to your MUD's log files.
 
 Watch for these in your logs:
 ```
-OpenIMC: Connected to gateway
-OpenIMC: Authenticated successfully
-OpenIMC: Player John logged in
-OpenIMC: Received tell from Jane@OtherMUD
+MudVault Mesh: Connected to gateway
+MudVault Mesh: Authenticated successfully
+MudVault Mesh: Player John logged in
+MudVault Mesh: Received tell from Jane@OtherMUD
 ```
 
 ## Performance Notes
@@ -245,8 +245,8 @@ OpenIMC: Received tell from Jane@OtherMUD
 
 ## License
 
-This integration code is released under the MIT License, same as OpenIMC.
+This integration code is released under the MIT License, same as MudVault Mesh.
 
 ---
 
-**Ready to connect your MUD to the OpenIMC network? Follow the steps above and join the inter-MUD community!**
+**Ready to connect your MUD to the MudVault Mesh network? Follow the steps above and join the inter-MUD community!**

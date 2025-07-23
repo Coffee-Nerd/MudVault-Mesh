@@ -1,6 +1,6 @@
-# OpenIMC Integration Guide
+# MudVault Mesh Integration Guide
 
-This guide walks you through integrating OpenIMC with your MUD server, regardless of the programming language or MUD codebase you're using.
+This guide walks you through integrating MudVault Mesh with your MUD server, regardless of the programming language or MUD codebase you're using.
 
 ## Table of Contents
 
@@ -13,7 +13,7 @@ This guide walks you through integrating OpenIMC with your MUD server, regardles
 
 ## Quick Start
 
-### 1. Set Up OpenIMC Gateway
+### 1. Set Up MudVault Mesh Gateway
 
 The easiest way to get started is with Docker:
 
@@ -60,11 +60,11 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 
 ## Integration Options
 
-You can integrate OpenIMC in several ways, depending on your MUD's architecture:
+You can integrate MudVault Mesh in several ways, depending on your MUD's architecture:
 
 ### Option 1: Direct WebSocket Integration (Recommended)
 
-Connect directly to the OpenIMC WebSocket for real-time bidirectional communication.
+Connect directly to the MudVault Mesh WebSocket for real-time bidirectional communication.
 
 **Pros:**
 - Real-time message delivery
@@ -106,14 +106,14 @@ Use WebSocket for receiving messages and REST API for sending.
 
 ### Node.js / JavaScript
 
-#### Using the OpenIMC Client Library
+#### Using the MudVault Mesh Client Library
 
 ```javascript
-const { OpenIMCClient } = require('./src/clients');
+const { MudVaultMeshClient } = require('./src/clients');
 
 class MUDIntegration {
   constructor(mudName, apiKey) {
-    this.client = new OpenIMCClient({
+    this.client = new MudVaultMeshClient({
       mudName: mudName,
       autoReconnect: true,
       heartbeatInterval: 30000
@@ -126,7 +126,7 @@ class MUDIntegration {
   async connect() {
     try {
       await this.client.connect('ws://localhost:8081', this.apiKey);
-      console.log('Connected to OpenIMC');
+      console.log('Connected to MudVault Mesh');
     } catch (error) {
       console.error('Failed to connect:', error);
     }
@@ -154,15 +154,15 @@ class MUDIntegration {
 
     // Handle connection events
     this.client.on('connected', () => {
-      console.log('OpenIMC connected');
+      console.log('MudVault Mesh connected');
     });
 
     this.client.on('disconnected', ({ code, reason }) => {
-      console.log(`OpenIMC disconnected: ${code} ${reason}`);
+      console.log(`MudVault Mesh disconnected: ${code} ${reason}`);
     });
 
     this.client.on('error', (error) => {
-      console.error('OpenIMC error:', error);
+      console.error('MudVault Mesh error:', error);
     });
   }
 
@@ -250,7 +250,7 @@ import websockets
 import aiohttp
 from typing import Dict, Any, List
 
-class OpenIMCIntegration:
+class MudVaultMeshIntegration:
     def __init__(self, mud_name: str, api_key: str):
         self.mud_name = mud_name
         self.api_key = api_key
@@ -258,7 +258,7 @@ class OpenIMCIntegration:
         self.running = False
 
     async def connect(self):
-        """Connect to OpenIMC gateway"""
+        """Connect to MudVault Mesh gateway"""
         try:
             self.websocket = await websockets.connect('ws://localhost:8081')
             await self.authenticate()
@@ -266,7 +266,7 @@ class OpenIMCIntegration:
             
             # Start message handler
             asyncio.create_task(self.message_handler())
-            print(f"Connected to OpenIMC as {self.mud_name}")
+            print(f"Connected to MudVault Mesh as {self.mud_name}")
             
         except Exception as e:
             print(f"Failed to connect: {e}")
@@ -305,7 +305,7 @@ class OpenIMCIntegration:
             self.running = False
 
     async def process_message(self, message: Dict[str, Any]):
-        """Process incoming OpenIMC message"""
+        """Process incoming MudVault Mesh message"""
         msg_type = message.get('type')
         
         if msg_type == 'tell':
@@ -454,7 +454,7 @@ class OpenIMCIntegration:
 
 # Usage
 async def main():
-    integration = OpenIMCIntegration('MyMUD', 'your-api-key')
+    integration = MudVaultMeshIntegration('MyMUD', 'your-api-key')
     await integration.connect()
     
     # Keep running
@@ -477,7 +477,7 @@ asyncio.run(main())
 using json = nlohmann::json;
 typedef websocketpp::client<websocketpp::config::asio_tls_client> client;
 
-class OpenIMCIntegration {
+class MudVaultMeshIntegration {
 private:
     client ws_client;
     websocketpp::connection_hdl connection;
@@ -486,7 +486,7 @@ private:
     bool connected = false;
 
 public:
-    OpenIMCIntegration(const std::string& mud_name, const std::string& api_key)
+    MudVaultMeshIntegration(const std::string& mud_name, const std::string& api_key)
         : mud_name(mud_name), api_key(api_key) {
         
         ws_client.set_access_channels(websocketpp::log::alevel::all);
@@ -790,7 +790,7 @@ Test individual components:
 
 ```javascript
 // Test message handling
-describe('OpenIMC Integration', () => {
+describe('MudVault Mesh Integration', () => {
   it('should handle incoming tells', async () => {
     const integration = new MUDIntegration('TestMUD', 'test-key');
     const mockMessage = {
@@ -810,11 +810,11 @@ describe('OpenIMC Integration', () => {
 
 ### 2. Integration Tests
 
-Test with a running OpenIMC gateway:
+Test with a running MudVault Mesh gateway:
 
 ```bash
 # Start test gateway
-docker run -d -p 8080:8080 -p 8081:8081 --name test-openimc openimc/gateway:latest
+docker run -d -p 8080:8080 -p 8081:8081 --name test-mudvault mudvault-mesh/gateway:latest
 
 # Register test MUD
 curl -X POST http://localhost:8080/api/v1/auth/register \
@@ -830,14 +830,14 @@ node test-websocket.js
 Test performance under load:
 
 ```javascript
-const { OpenIMCClient } = require('openimc');
+const { MudVaultMeshClient } = require('mudvault-mesh');
 
 async function loadTest() {
   const clients = [];
   
   // Create 100 concurrent connections
   for (let i = 0; i < 100; i++) {
-    const client = new OpenIMCClient({ mudName: `TestMUD${i}` });
+    const client = new MudVaultMeshClient({ mudName: `TestMUD${i}` });
     await client.connect('ws://localhost:8081');
     clients.push(client);
   }
@@ -859,7 +859,7 @@ async function loadTest() {
 ### Common Issues
 
 1. **Connection Refused**
-   - Check if OpenIMC gateway is running
+   - Check if MudVault Mesh gateway is running
    - Verify port accessibility
    - Check firewall settings
 
@@ -894,7 +894,7 @@ logging.basicConfig(level=logging.DEBUG)
 Use WebSocket debugging tools:
 - Browser developer tools
 - Wireshark for packet analysis
-- OpenIMC gateway logs
+- MudVault Mesh gateway logs
 
 ### Performance Optimization
 

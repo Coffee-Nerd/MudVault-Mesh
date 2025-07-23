@@ -1,6 +1,6 @@
-# OpenIMC API Reference
+# MudVault Mesh API Reference
 
-This document provides a comprehensive reference for the OpenIMC REST API and WebSocket interface.
+This document provides a comprehensive reference for the MudVault Mesh REST API and WebSocket interface.
 
 ## Table of Contents
 
@@ -13,7 +13,7 @@ This document provides a comprehensive reference for the OpenIMC REST API and We
 
 ## Authentication
 
-OpenIMC supports two authentication methods:
+MudVault Mesh supports two authentication methods:
 
 ### 1. API Key Authentication
 
@@ -315,7 +315,7 @@ Connect to: `ws://localhost:8081`
 
 ## Message Format
 
-All messages follow the OpenIMC message format:
+All messages follow the MudVault Mesh message format:
 
 ```json
 {
@@ -471,11 +471,11 @@ When rate limited:
 
 ## Example Client Implementation
 
-### Node.js with OpenIMC Client
+### Node.js with MudVault Mesh Client
 ```javascript
-const { OpenIMCClient } = require('openimc');
+const { MudVaultClient } = require('mudvault-mesh');
 
-const client = new OpenIMCClient({
+const client = new MudVaultClient({
   mudName: 'MyMUD',
   autoReconnect: true
 });
@@ -507,7 +507,7 @@ import asyncio
 import json
 import websockets
 
-async def openimc_client():
+async def mudvault_client():
     uri = "ws://localhost:8081"
     
     async with websockets.connect(uri) as websocket:
@@ -535,7 +535,7 @@ async def openimc_client():
             data = json.loads(message)
             print(f"Received: {data['type']} from {data['from']['mud']}")
 
-asyncio.run(openimc_client())
+asyncio.run(mudvault_client())
 ```
 
 For more examples and detailed integration guides, see the [Integration Guide](INTEGRATION.md).

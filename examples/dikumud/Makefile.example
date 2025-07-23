@@ -1,31 +1,31 @@
-# Example Makefile additions for OpenIMC integration
+# Example Makefile additions for MudVault Mesh integration
 # Add these lines to your existing MUD Makefile
 
-# OpenIMC source files
-OPENIMC_OBJS = openimc.o imc_commands.o websocket.o json_simple.o
+# MudVault Mesh source files
+MUDVAULT_MESH_OBJS = mudvault_mesh.o imc_commands.o websocket.o json_simple.o
 
 # Add to your existing OBJS line
-# OBJS = ... $(OPENIMC_OBJS)
+# OBJS = ... $(MUDVAULT_MESH_OBJS)
 
 # Add OpenSSL library for WebSocket implementation
 # LIBS = ... -lssl -lcrypto
 
-# Dependencies for OpenIMC files
-openimc.o: openimc.c openimc.h imc_config.h
-	$(CC) $(CFLAGS) -c openimc.c
+# Dependencies for MudVault Mesh files
+mudvault_mesh.o: mudvault_mesh.c mudvault_mesh.h imc_config.h
+	$(CC) $(CFLAGS) -c mudvault_mesh.c
 
-imc_commands.o: imc_commands.c openimc.h
+imc_commands.o: imc_commands.c mudvault_mesh.h
 	$(CC) $(CFLAGS) -c imc_commands.c
 
-websocket.o: websocket.c openimc.h
+websocket.o: websocket.c mudvault_mesh.h
 	$(CC) $(CFLAGS) -c websocket.c
 
-json_simple.o: json_simple.c json.h openimc.h
+json_simple.o: json_simple.c json.h mudvault_mesh.h
 	$(CC) $(CFLAGS) -c json_simple.c
 
 # Clean rule addition
 # clean:
-#	rm -f *.o your_mud_executable $(OPENIMC_OBJS)
+#	rm -f *.o your_mud_executable $(MUDVAULT_MESH_OBJS)
 
 # Example complete Makefile for CircleMUD:
 #
@@ -39,7 +39,7 @@ json_simple.o: json_simple.c json.h openimc.h
 #            graph.o handler.o house.o interpreter.o limits.o magic.o \
 #            mail.o mobact.o modify.o objsave.o olc.o random.o shop.o \
 #            spec_assign.o spec_procs.o spell_parser.o spells.o utils.o \
-#            weather.o $(OPENIMC_OBJS)
+#            weather.o $(MUDVAULT_MESH_OBJS)
 # 
 # circle: $(OBJFILES)
 #	$(CC) -o circle $(OBJFILES) $(LIBS)

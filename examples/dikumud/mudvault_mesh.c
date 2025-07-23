@@ -1,10 +1,10 @@
 /*
- * OpenIMC Core Implementation for DikuMUD/Merc
+ * MudVault Mesh Core Implementation for DikuMUD/Merc
  * 
- * This file contains the core OpenIMC functionality for connecting
- * your DikuMUD-based MUD to the OpenIMC network.
+ * This file contains the core MudVault Mesh functionality for connecting
+ * your DikuMUD-based MUD to the MudVault Mesh network.
  * 
- * Author: OpenIMC Development Team
+ * Author: MudVault Mesh Development Team
  * License: MIT
  */
 
@@ -15,7 +15,7 @@
 #include "interpreter.h"
 #include "handler.h"
 #include "db.h"
-#include "openimc.h"
+#include "mudvault_mesh.h"
 
 /* Global IMC data */
 IMC_DATA *imc_data = NULL;
@@ -34,10 +34,10 @@ static int who_this_minute = 0;
 /* =================================================================== */
 
 /*
- * Initialize the OpenIMC system
+ * Initialize the MudVault Mesh system
  */
 int imc_startup(void) {
-    imc_log("OpenIMC starting up...");
+    imc_log("MudVault Mesh starting up...");
     
     /* Allocate main data structure */
     imc_data = IMC_CREATE(IMC_DATA);
@@ -68,17 +68,17 @@ int imc_startup(void) {
     }
     
     imc_active = TRUE;
-    imc_log("OpenIMC startup complete");
+    imc_log("MudVault Mesh startup complete");
     return IMC_ERR_NONE;
 }
 
 /*
- * Shutdown the OpenIMC system
+ * Shutdown the MudVault Mesh system
  */
 void imc_shutdown(void) {
     if (!imc_data) return;
     
-    imc_log("OpenIMC shutting down...");
+    imc_log("MudVault Mesh shutting down...");
     imc_active = FALSE;
     
     /* Disconnect from gateway */
@@ -88,7 +88,7 @@ void imc_shutdown(void) {
     /* TODO: Implement proper cleanup of all linked lists */
     
     IMC_FREE(imc_data);
-    imc_log("OpenIMC shutdown complete");
+    imc_log("MudVault Mesh shutdown complete");
 }
 
 /*
@@ -168,7 +168,7 @@ bool imc_is_connected(void) {
 /* =================================================================== */
 
 /*
- * Connect to the OpenIMC gateway
+ * Connect to the MudVault Mesh gateway
  */
 int imc_connect(void) {
     if (!imc_data) return IMC_ERR_NO_CONNECTION;
@@ -208,7 +208,7 @@ int imc_connect(void) {
         return IMC_ERR_AUTH_FAILED;
     }
     
-    imc_log("Connected to OpenIMC gateway");
+    imc_log("Connected to MudVault Mesh gateway");
     return IMC_ERR_NONE;
 }
 
@@ -227,7 +227,7 @@ void imc_disconnect(void) {
     imc_data->buflen = 0;
     imc_data->connect_time = time(NULL);
     
-    imc_log("Disconnected from OpenIMC gateway");
+    imc_log("Disconnected from MudVault Mesh gateway");
 }
 
 /*

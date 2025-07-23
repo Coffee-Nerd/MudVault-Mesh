@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import { OpenIMCMessage, ConnectionInfo, MudInfo, ErrorCodes } from '../types';
+import { MudVaultMessage, ConnectionInfo, MudInfo, ErrorCodes } from '../types';
 import { validateMessage } from '../utils/validation';
 import { createErrorMessage, createPongMessage, isExpired } from '../utils/message';
 import logger from '../utils/logger';
@@ -122,7 +122,7 @@ export class Gateway extends EventEmitter {
     }
   }
 
-  private async handleAuthentication(connectionId: string, message: OpenIMCMessage): Promise<void> {
+  private async handleAuthentication(connectionId: string, message: MudVaultMessage): Promise<void> {
     const connection = this.connectionInfo.get(connectionId);
     if (!connection) {
       return;
@@ -156,7 +156,7 @@ export class Gateway extends EventEmitter {
     this.emit('mudConnected', { mudName, connectionId });
   }
 
-  private handlePing(connectionId: string, message: OpenIMCMessage): void {
+  private handlePing(connectionId: string, message: MudVaultMessage): void {
     const connection = this.connectionInfo.get(connectionId);
     if (!connection) {
       return;
@@ -171,7 +171,7 @@ export class Gateway extends EventEmitter {
     this.sendMessage(connectionId, pongMessage);
   }
 
-  private async routeMessage(connectionId: string, message: OpenIMCMessage): Promise<void> {
+  private async routeMessage(connectionId: string, message: MudVaultMessage): Promise<void> {
     const connection = this.connectionInfo.get(connectionId);
     if (!connection) {
       return;
@@ -191,7 +191,7 @@ export class Gateway extends EventEmitter {
     this.emit('messageRouted', { message, fromConnection: connectionId });
   }
 
-  private async broadcastMessage(message: OpenIMCMessage, excludeConnection?: string): Promise<void> {
+  private async broadcastMessage(message: MudVaultMessage, excludeConnection?: string): Promise<void> {
     const promises: Promise<void>[] = [];
     
     for (const [connId, ws] of this.connections) {
@@ -206,7 +206,7 @@ export class Gateway extends EventEmitter {
     await Promise.all(promises);
   }
 
-  private async forwardMessage(message: OpenIMCMessage, fromConnection: string): Promise<void> {
+  private async forwardMessage(message: MudVaultMessage, fromConnection: string): Promise<void> {
     const targetMud = message.to.mud;
     const targetConnection = this.findConnectionByMud(targetMud);
 
@@ -218,7 +218,7 @@ export class Gateway extends EventEmitter {
     await this.sendMessage(targetConnection, message);
   }
 
-  private async handleGatewayMessage(connectionId: string, message: OpenIMCMessage): Promise<void> {
+  private async handleGatewayMessage(connectionId: string, message: MudVaultMessage): Promise<void> {
     switch (message.type) {
       case 'who':
         if ((message.payload as any).request) {
@@ -237,7 +237,7 @@ export class Gateway extends EventEmitter {
     }
   }
 
-  private async handleWhoRequest(connectionId: string, message: OpenIMCMessage): Promise<void> {
+  private async handleWhoRequest(connectionId: string, message: MudVaultMessage): Promise<void> {
     const connectedMuds = await redisService.smembers('connected_muds');
     
     await this.sendMessage(connectionId, {
@@ -250,7 +250,7 @@ export class Gateway extends EventEmitter {
     });
   }
 
-  private async handleLocateRequest(connectionId: string, message: OpenIMCMessage): Promise<void> {
+  private async handleLocateRequest(connectionId: string, message: MudVaultMessage): Promise<void> {
     const { user } = message.payload as any;
     const locations: any[] = [];
     
@@ -283,7 +283,7 @@ export class Gateway extends EventEmitter {
     return null;
   }
 
-  private async sendMessage(connectionId: string, message: OpenIMCMessage): Promise<void> {
+  private async sendMessage(connectionId: string, message: MudVaultMessage): Promise<void> {
     const ws = this.connections.get(connectionId);
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       return;
@@ -312,7 +312,7 @@ export class Gateway extends EventEmitter {
     this.sendMessage(connectionId, errorMessage);
   }
 
-  private async storeMessage(message: OpenIMCMessage): Promise<void> {
+  private async storeMessage(message: MudVaultMessage): Promise<void> {
     try {
       const key = `message_history:${message.type}`;
       await redisService.lpush(key, JSON.stringify(message));

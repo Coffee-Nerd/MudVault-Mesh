@@ -1,6 +1,6 @@
-# OpenIMC DikuMUD Integration - Installation Guide
+# MudVault Mesh DikuMUD Integration - Installation Guide
 
-This guide will walk you through integrating OpenIMC with your DikuMUD, CircleMUD, or Merc-based MUD.
+This guide will walk you through integrating MudVault Mesh with your DikuMUD, CircleMUD, or Merc-based MUD.
 
 ## Prerequisites
 
@@ -26,10 +26,10 @@ sudo dnf install gcc gcc-c++ make openssl-devel
 
 ## Step 1: Copy Integration Files
 
-Copy all the OpenIMC integration files to your MUD's source directory:
+Copy all the MudVault Mesh integration files to your MUD's source directory:
 
 ```bash
-# From the OpenIMC repository
+# From the MudVault Mesh repository
 cp examples/dikumud/*.c /path/to/your/mud/src/
 cp examples/dikumud/*.h /path/to/your/mud/src/
 ```
@@ -60,14 +60,14 @@ Uncomment the line that matches your MUD type:
 
 ## Step 3: Update Your Makefile
 
-Add the OpenIMC objects to your Makefile. Here's an example for CircleMUD:
+Add the MudVault Mesh objects to your Makefile. Here's an example for CircleMUD:
 
 ```makefile
 # Add these lines to your Makefile
-OPENIMC_OBJS = openimc.o imc_commands.o websocket.o json_simple.o
+MUDVAULT_MESH_OBJS = openimc.o imc_commands.o websocket.o json_simple.o
 
-# Modify your OBJFILES line to include OpenIMC objects
-OBJFILES = comm.o act.comm.o act.informative.o ... $(OPENIMC_OBJS)
+# Modify your OBJFILES line to include MudVault Mesh objects
+OBJFILES = comm.o act.comm.o act.informative.o ... $(MUDVAULT_MESH_OBJS)
 
 # Add OpenSSL to your LIBS line
 LIBS = -lcrypt -lssl -lcrypto
@@ -89,14 +89,14 @@ In your main header file (usually `structs.h` or similar), add:
 #include "openimc.h"
 ```
 
-### 4.2 Initialize OpenIMC
+### 4.2 Initialize MudVault Mesh
 
 In your main function (usually in `comm.c` or `main.c`), add:
 
 ```c
 /* After other initializations, before entering main loop */
 if (imc_startup() < 0) {
-    log("SYSERR: Could not initialize OpenIMC");
+    log("SYSERR: Could not initialize MudVault Mesh");
     /* Don't exit - just continue without IMC */
 }
 ```
@@ -167,7 +167,7 @@ Add these function declarations to your header file:
 
 #### For Merc/ROM/Smaug:
 ```c
-/* OpenIMC command functions */
+/* MudVault Mesh command functions */
 DO_FUN(do_imctell);
 DO_FUN(do_imcemote);
 DO_FUN(do_imcwho);
@@ -185,7 +185,7 @@ DO_FUN(do_imcreconnect);
 
 #### For CircleMUD:
 ```c
-/* OpenIMC command functions */
+/* MudVault Mesh command functions */
 ACMD(do_imctell);
 ACMD(do_imcemote);
 ACMD(do_imcwho);
@@ -231,7 +231,7 @@ imc_player_idle(ch, ch->char_specials.timer);
 
 ## Step 7: Register Your MUD
 
-Before connecting, you need to register your MUD with the OpenIMC network:
+Before connecting, you need to register your MUD with the MudVault Mesh network:
 
 ```bash
 curl -X POST https://mudvault.org/api/v1/auth/register \
@@ -260,8 +260,8 @@ make
 
 If you get compilation errors, check:
 - OpenSSL development libraries are installed
-- All OpenIMC files are in the src directory
-- Makefile includes the OpenIMC objects and libraries
+- All MudVault Mesh files are in the src directory
+- Makefile includes the MudVault Mesh objects and libraries
 - Your MUD type is correctly defined in `imc_config.h`
 
 ## Step 9: Test
@@ -314,13 +314,13 @@ This will show all IMC messages in your logs.
 ### Log Messages
 
 Watch your MUD logs for these messages:
-- `OpenIMC starting up...` - IMC is initializing
-- `Connected to OpenIMC gateway` - Successfully connected
-- `OpenIMC: Player John logged in` - Player events working
+- `MudVault Mesh starting up...` - Mesh is initializing
+- `Connected to MudVault Mesh gateway` - Successfully connected
+- `MudVault Mesh: Player John logged in` - Player events working
 
 ## Performance Impact
 
-The OpenIMC integration has minimal performance impact:
+The MudVault Mesh integration has minimal performance impact:
 - CPU usage: <0.1% on typical MUDs
 - Memory usage: ~50KB base + ~1KB per connected MUD
 - Network usage: ~1KB/minute for idle MUD
@@ -371,4 +371,4 @@ Adjust rate limits in `imc_config.h` if needed:
 
 ## Congratulations!
 
-Your MUD is now connected to the OpenIMC network! Players can communicate with other MUDs using the commands listed in the help system (`imchelp`).
+Your MUD is now connected to the MudVault Mesh network! Players can communicate with other MUDs using the commands listed in the help system (`imchelp`).

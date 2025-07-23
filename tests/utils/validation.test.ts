@@ -1,8 +1,8 @@
 import { validateMessage } from '../../src/utils/validation';
-import { OpenIMCMessage } from '../../src/types';
+import { MudVaultMessage } from '../../src/types';
 
 describe('Message Validation', () => {
-  const validMessage: OpenIMCMessage = {
+  const validMessage: MudVaultMessage = {
     version: '1.0',
     id: '123e4567-e89b-12d3-a456-426614174000',
     timestamp: new Date().toISOString(),
@@ -76,7 +76,7 @@ describe('Message Validation', () => {
   });
 
   test('should validate channel message', () => {
-    const channelMessage: OpenIMCMessage = {
+    const channelMessage: MudVaultMessage = {
       ...validMessage,
       type: 'channel',
       to: { mud: '*', channel: 'gossip' },
@@ -93,7 +93,7 @@ describe('Message Validation', () => {
   });
 
   test('should validate who request message', () => {
-    const whoMessage: OpenIMCMessage = {
+    const whoMessage: MudVaultMessage = {
       ...validMessage,
       type: 'who',
       to: { mud: 'TargetMUD' },
@@ -106,7 +106,7 @@ describe('Message Validation', () => {
   });
 
   test('should validate auth message', () => {
-    const authMessage: OpenIMCMessage = {
+    const authMessage: MudVaultMessage = {
       ...validMessage,
       type: 'auth',
       to: { mud: 'Gateway' },
@@ -122,7 +122,7 @@ describe('Message Validation', () => {
   });
 
   test('should validate ping message', () => {
-    const pingMessage: OpenIMCMessage = {
+    const pingMessage: MudVaultMessage = {
       ...validMessage,
       type: 'ping',
       to: { mud: 'Gateway' },
@@ -135,7 +135,7 @@ describe('Message Validation', () => {
   });
 
   test('should validate error message', () => {
-    const errorMessage: OpenIMCMessage = {
+    const errorMessage: MudVaultMessage = {
       ...validMessage,
       type: 'error',
       from: { mud: 'Gateway' },

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { Channel, ChannelMessage, OpenIMCMessage, MessageEndpoint } from '../types';
+import { Channel, ChannelMessage, MudVaultMessage, MessageEndpoint } from '../types';
 import { createChannelMessage } from '../utils/message';
 import logger from '../utils/logger';
 import redisService from './redis';
@@ -152,7 +152,7 @@ export class ChannelService extends EventEmitter {
     });
   }
 
-  private async addMessageToChannel(channelName: string, message: OpenIMCMessage): Promise<void> {
+  private async addMessageToChannel(channelName: string, message: MudVaultMessage): Promise<void> {
     const channel = this.channels.get(channelName);
     if (!channel) {
       return;

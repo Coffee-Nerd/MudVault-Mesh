@@ -1,4 +1,4 @@
-# Multi-stage build for OpenIMC Gateway
+# Multi-stage build for MudVault Mesh Gateway
 FROM node:18-alpine AS builder
 
 # Set working directory
@@ -27,7 +27,7 @@ RUN apk update && apk upgrade && apk add --no-cache \
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S openimc -u 1001
+    adduser -S mudvault -u 1001
 
 # Set working directory
 WORKDIR /app
@@ -42,10 +42,10 @@ RUN npm ci --only=production && npm cache clean --force
 COPY --from=builder /app/dist ./dist
 
 # Create logs directory
-RUN mkdir -p logs && chown -R openimc:nodejs logs
+RUN mkdir -p logs && chown -R mudvault:nodejs logs
 
 # Switch to non-root user
-USER openimc
+USER mudvault
 
 # Expose ports
 EXPOSE 8080 8081

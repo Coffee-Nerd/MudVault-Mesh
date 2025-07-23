@@ -1,4 +1,4 @@
-export interface OpenIMCMessage {
+export interface MudVaultMessage {
   version: string;
   id: string;
   timestamp: string;

@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import { OpenIMCMessage, MessageEndpoint, UserInfo } from '../types';
+import { MudVaultMessage, MessageEndpoint, UserInfo } from '../types';
 import { validateMessage } from '../utils/validation';
 import { 
   createMessage, 
@@ -13,7 +13,7 @@ import {
   createPongMessage
 } from '../utils/message';
 
-export interface OpenIMCClientOptions {
+export interface MudVaultClientOptions {
   mudName: string;
   autoReconnect?: boolean;
   reconnectInterval?: number;
@@ -30,9 +30,9 @@ export interface ConnectionState {
   lastPong?: number;
 }
 
-export class OpenIMCClient extends EventEmitter {
+export class MudVaultClient extends EventEmitter {
   private ws: WebSocket | null = null;
-  private options: Required<OpenIMCClientOptions>;
+  private options: Required<MudVaultClientOptions>;
   private state: ConnectionState = {
     connected: false,
     authenticated: false,
@@ -42,7 +42,7 @@ export class OpenIMCClient extends EventEmitter {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private gatewayUrl: string = '';
 
-  constructor(options: OpenIMCClientOptions) {
+  constructor(options: MudVaultClientOptions) {
     super();
     
     this.options = {
@@ -190,7 +190,7 @@ export class OpenIMCClient extends EventEmitter {
     }
   }
 
-  private handlePing(message: OpenIMCMessage): void {
+  private handlePing(message: MudVaultMessage): void {
     const pongMessage = createPongMessage(
       { mud: this.options.mudName },
       { mud: 'Gateway' },
@@ -200,7 +200,7 @@ export class OpenIMCClient extends EventEmitter {
     this.sendMessage(pongMessage);
   }
 
-  private handlePong(message: OpenIMCMessage): void {
+  private handlePong(message: MudVaultMessage): void {
     this.state.lastPong = Date.now();
     const latency = this.state.lastPong - (message.payload as any).timestamp;
     this.emit('pong', { latency });
@@ -276,7 +276,7 @@ export class OpenIMCClient extends EventEmitter {
     }, this.options.heartbeatInterval);
   }
 
-  private sendMessage(message: OpenIMCMessage): void {
+  private sendMessage(message: MudVaultMessage): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error('Not connected to gateway');
     }
@@ -401,33 +401,33 @@ export class OpenIMCClient extends EventEmitter {
   }
 
   // Event handler convenience methods
-  public onTell(handler: (message: OpenIMCMessage) => void): this {
+  public onTell(handler: (message: MudVaultMessage) => void): this {
     return this.on('tell', handler);
   }
 
-  public onChannel(handler: (message: OpenIMCMessage) => void): this {
+  public onChannel(handler: (message: MudVaultMessage) => void): this {
     return this.on('channel', handler);
   }
 
-  public onWho(handler: (message: OpenIMCMessage) => void): this {
+  public onWho(handler: (message: MudVaultMessage) => void): this {
     return this.on('who', handler);
   }
 
-  public onFinger(handler: (message: OpenIMCMessage) => void): this {
+  public onFinger(handler: (message: MudVaultMessage) => void): this {
     return this.on('finger', handler);
   }
 
-  public onLocate(handler: (message: OpenIMCMessage) => void): this {
+  public onLocate(handler: (message: MudVaultMessage) => void): this {
     return this.on('locate', handler);
   }
 
-  public onEmote(handler: (message: OpenIMCMessage) => void): this {
+  public onEmote(handler: (message: MudVaultMessage) => void): this {
     return this.on('emote', handler);
   }
 
-  public onEmoteTo(handler: (message: OpenIMCMessage) => void): this {
+  public onEmoteTo(handler: (message: MudVaultMessage) => void): this {
     return this.on('emoteto', handler);
   }
 }
 
-export default OpenIMCClient;
+export default MudVaultClient;

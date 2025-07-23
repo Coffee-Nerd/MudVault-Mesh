@@ -26,14 +26,14 @@
   ],
   "author": "MudVault Team <asmodeusbrooding@gmail.com>",
   "license": "MIT",
-  "homepage": "https://github.com/Coffee-Nerd/OpenIMC#readme",
+  "homepage": "https://github.com/Coffee-Nerd/MudVault-Mesh#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Coffee-Nerd/OpenIMC.git",
+    "url": "git+https://github.com/Coffee-Nerd/MudVault-Mesh.git",
     "directory": "clients/nodejs"
   },
   "bugs": {
-    "url": "https://github.com/Coffee-Nerd/OpenIMC/issues"
+    "url": "https://github.com/Coffee-Nerd/MudVault-Mesh/issues"
   },
   "engines": {
     "node": ">=18.0.0"

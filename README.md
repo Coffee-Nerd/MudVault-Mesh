@@ -4,9 +4,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/r6kM56YrEV)
-[![GitHub Stars](https://img.shields.io/github/stars/Coffee-Nerd/OpenIMC?style=social)](https://github.com/Coffee-Nerd/OpenIMC)
-[![Issues](https://img.shields.io/github/issues/Coffee-Nerd/OpenIMC)](https://github.com/Coffee-Nerd/OpenIMC/issues)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/Coffee-Nerd/OpenIMC)
+[![GitHub Stars](https://img.shields.io/github/stars/Coffee-Nerd/MudVault-Mesh?style=social)](https://github.com/Coffee-Nerd/MudVault-Mesh)
+[![Issues](https://img.shields.io/github/issues/Coffee-Nerd/MudVault-Mesh)](https://github.com/Coffee-Nerd/MudVault-Mesh/issues)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/Coffee-Nerd/MudVault-Mesh)
 
 **Connect your MUD to the mesh - modern, secure, and simple**
 
@@ -154,7 +154,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 ```bash
 # Clone the repository
 git clone https://github.com/Coffee-Nerd/OpenIMC.git
-cd openimc
+cd OpenIMC
 
 # Install dependencies
 npm install

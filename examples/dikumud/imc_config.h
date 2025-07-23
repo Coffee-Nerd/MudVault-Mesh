@@ -1,5 +1,5 @@
 /*
- * OpenIMC Configuration for DikuMUD/Merc
+ * MudVault Mesh Configuration for DikuMUD/Merc
  * 
  * Configure these settings for your MUD before compiling
  */
@@ -14,11 +14,11 @@
 /* Your MUD's unique name - MUST be unique across the network */
 #define IMC_MUD_NAME        "YourMUDName"
 
-/* OpenIMC Gateway connection settings */
-#define IMC_GATEWAY_HOST    "mudvault.org"      /* Gateway hostname */
+/* MudVault Mesh Gateway connection settings */
+#define IMC_GATEWAY_HOST    "mesh.mudvault.org" /* MudVault Mesh gateway */
 #define IMC_GATEWAY_PORT    8081                /* WebSocket port */
 
-/* Your API key - get this from registering your MUD */
+/* Your API key - get this from registering your MUD with MudVault Mesh */
 #define IMC_API_KEY         "your-api-key-here"
 
 /* Your MUD admin email for registration */
@@ -92,15 +92,15 @@
 /* FEATURE TOGGLES - Enable/disable specific features                 */
 /* =================================================================== */
 
-#define IMC_ENABLE_TELLS       1               /* Enable inter-MUD tells */
+#define IMC_ENABLE_TELLS       1               /* Enable inter-MUD tells via MudVault Mesh */
 #define IMC_ENABLE_CHANNELS    1               /* Enable channel chat */
 #define IMC_ENABLE_WHO         1               /* Enable who lists */
 #define IMC_ENABLE_FINGER      1               /* Enable finger info */
 #define IMC_ENABLE_LOCATE      1               /* Enable user location */
-#define IMC_ENABLE_EMOTES      1               /* Enable inter-MUD emotes */
+#define IMC_ENABLE_EMOTES      1               /* Enable inter-MUD emotes via MudVault Mesh */
 #define IMC_ENABLE_BEEP        1               /* Enable beep/page */
 #define IMC_ENABLE_FILE        0               /* Enable file transfers (future) */
-#define IMC_ENABLE_MAIL        0               /* Enable inter-MUD mail (future) */
+#define IMC_ENABLE_MAIL        0               /* Enable inter-MUD mail via MudVault Mesh (future) */
 
 /* Channel features */
 #define IMC_ENABLE_CHAN_WHO    1               /* Enable channel who lists */
@@ -192,7 +192,7 @@
 /* =================================================================== */
 
 #if !defined(IMC_MUD_NAME) || !defined(IMC_GATEWAY_HOST) || !defined(IMC_API_KEY)
-#error "You must configure IMC_MUD_NAME, IMC_GATEWAY_HOST, and IMC_API_KEY"
+#error "You must configure IMC_MUD_NAME, IMC_GATEWAY_HOST, and IMC_API_KEY for MudVault Mesh"
 #endif
 
 #if IMC_MAX_MESSAGE_LEN > 4096

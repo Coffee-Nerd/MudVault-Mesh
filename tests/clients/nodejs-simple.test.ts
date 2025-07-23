@@ -1,9 +1,9 @@
-import { OpenIMCClient } from '../../src/clients/nodejs';
+import { MudVaultClient } from '../../src/clients/nodejs';
 
-describe('OpenIMCClient - Basic Tests', () => {
+describe('MudVaultClient - Basic Tests', () => {
   describe('constructor', () => {
     test('should create client with required options', () => {
-      const client = new OpenIMCClient({ mudName: 'TestMUD' });
+      const client = new MudVaultClient({ mudName: 'TestMUD' });
       
       expect(client.getMudName()).toBe('TestMUD');
       expect(client.isConnected()).toBe(false);
@@ -12,18 +12,18 @@ describe('OpenIMCClient - Basic Tests', () => {
 
     test('should throw error for missing mud name', () => {
       expect(() => {
-        new OpenIMCClient({ mudName: '' });
+        new MudVaultClient({ mudName: '' });
       }).toThrow('MUD name is required and must be a string');
     });
 
     test('should throw error for non-string mud name', () => {
       expect(() => {
-        new OpenIMCClient({ mudName: 123 as any });
+        new MudVaultClient({ mudName: 123 as any });
       }).toThrow('MUD name is required and must be a string');
     });
 
     test('should set default options correctly', () => {
-      const client = new OpenIMCClient({ mudName: 'TestMUD' });
+      const client = new MudVaultClient({ mudName: 'TestMUD' });
       const state = client.getConnectionState();
       
       expect(state.connected).toBe(false);
@@ -32,7 +32,7 @@ describe('OpenIMCClient - Basic Tests', () => {
     });
 
     test('should accept custom options', () => {
-      const client = new OpenIMCClient({
+      const client = new MudVaultClient({
         mudName: 'TestMUD',
         autoReconnect: false,
         reconnectInterval: 10000,
@@ -46,10 +46,10 @@ describe('OpenIMCClient - Basic Tests', () => {
   });
 
   describe('public methods when disconnected', () => {
-    let client: OpenIMCClient;
+    let client: MudVaultClient;
 
     beforeEach(() => {
-      client = new OpenIMCClient({ mudName: 'TestMUD' });
+      client = new MudVaultClient({ mudName: 'TestMUD' });
     });
 
     test('should throw error for sendTell when not connected', () => {
@@ -78,10 +78,10 @@ describe('OpenIMCClient - Basic Tests', () => {
   });
 
   describe('event handlers', () => {
-    let client: OpenIMCClient;
+    let client: MudVaultClient;
 
     beforeEach(() => {
-      client = new OpenIMCClient({ mudName: 'TestMUD' });
+      client = new MudVaultClient({ mudName: 'TestMUD' });
     });
 
     test('should register event handlers', () => {
@@ -121,7 +121,7 @@ describe('OpenIMCClient - Basic Tests', () => {
 
   describe('disconnect', () => {
     test('should handle disconnect when not connected', () => {
-      const client = new OpenIMCClient({ mudName: 'TestMUD' });
+      const client = new MudVaultClient({ mudName: 'TestMUD' });
       
       // Should not throw error
       client.disconnect();

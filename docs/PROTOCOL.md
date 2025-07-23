@@ -1,6 +1,6 @@
-# OpenIMC Protocol Specification v1.0
+# MudVault Mesh Protocol Specification v1.0
 
-This document defines the OpenIMC (Open Inter-MUD Communication) protocol, a modern replacement for legacy IMC protocols that enables seamless communication between MUD (Multi-User Dungeon) servers.
+This document defines the MudVault Mesh (Modern Inter-MUD Communication) protocol, a modern replacement for legacy IMC protocols that enables seamless communication between MUD (Multi-User Dungeon) servers.
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@ This document defines the OpenIMC (Open Inter-MUD Communication) protocol, a mod
 
 ## Overview
 
-OpenIMC is designed with the following principles:
+MudVault Mesh is designed with the following principles:
 
 - **Modern Standards**: Built on WebSocket, JSON, and HTTP/REST
 - **Language Agnostic**: Works with any programming language
@@ -29,7 +29,7 @@ OpenIMC is designed with the following principles:
 
 ### Message-Driven Architecture
 
-All communication in OpenIMC is message-based. Each message is a JSON object that contains:
+All communication in MudVault Mesh is message-based. Each message is a JSON object that contains:
 - Metadata about the message itself
 - Routing information (from/to)
 - Type-specific payload
@@ -37,7 +37,7 @@ All communication in OpenIMC is message-based. Each message is a JSON object tha
 
 ### Gateway Nodes
 
-OpenIMC operates through gateway nodes that:
+MudVault Mesh operates through gateway nodes that:
 - Accept connections from MUD servers
 - Route messages between MUDs
 - Provide REST API endpoints
@@ -54,7 +54,7 @@ While individual gateways serve as connection points, the overall network is dec
 
 ## Message Format
 
-All OpenIMC messages follow a standardized JSON format:
+All MudVault Mesh messages follow a standardized JSON format:
 
 ```json
 {
@@ -141,7 +141,7 @@ Special routing values:
 
 ## Transport Layer
 
-OpenIMC supports multiple transport mechanisms:
+MudVault Mesh supports multiple transport mechanisms:
 
 ### Primary: WebSocket over TLS
 
@@ -165,7 +165,7 @@ OpenIMC supports multiple transport mechanisms:
 
 ## Authentication
 
-OpenIMC uses a two-tier authentication system:
+MudVault Mesh uses a two-tier authentication system:
 
 ### 1. MUD Registration
 
@@ -575,7 +575,7 @@ Messages with `metadata.retry: true` may be retried:
 
 ## Extension Mechanism
 
-OpenIMC supports extensions through:
+MudVault Mesh supports extensions through:
 
 ### Custom Message Types
 
@@ -696,7 +696,7 @@ Planned features for future versions:
 
 ## Compliance Testing
 
-Implementations should pass the OpenIMC compliance test suite covering:
+Implementations should pass the MudVault Mesh compliance test suite covering:
 
 - Message format validation
 - Authentication flows
@@ -704,11 +704,11 @@ Implementations should pass the OpenIMC compliance test suite covering:
 - Rate limiting
 - Security requirements
 
-Test suite available at: https://github.com/Coffee-Nerd/OpenIMC/tests
+Test suite available at: https://github.com/Coffee-Nerd/MudVault-Mesh/tests
 
 ---
 
-**OpenIMC Protocol Specification v1.0**  
+**MudVault Mesh Protocol Specification v1.0**  
 **Last Updated**: January 8, 2025  
-**Maintainer**: OpenIMC Development Team  
+**Maintainer**: MudVault Mesh Development Team  
 **License**: MIT

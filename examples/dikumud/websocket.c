@@ -1,14 +1,14 @@
 /*
- * WebSocket Implementation for OpenIMC DikuMUD Integration
+ * WebSocket Implementation for MudVault Mesh DikuMUD Integration
  * 
  * This file provides a simple WebSocket client implementation for connecting
- * to the OpenIMC gateway. It handles the WebSocket handshake and framing.
+ * to the MudVault Mesh gateway. It handles the WebSocket handshake and framing.
  */
 
 #include "sysdep.h"
 #include "structs.h"
 #include "utils.h"
-#include "openimc.h"
+#include "mudvault_mesh.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -204,7 +204,7 @@ bool imc_websocket_handshake(int sock, const char *host, int port) {
         "Connection: Upgrade\r\n"
         "Sec-WebSocket-Key: %s\r\n"
         "Sec-WebSocket-Version: 13\r\n"
-        "User-Agent: OpenIMC-DikuMUD/1.0\r\n"
+        "User-Agent: MudVault-Mesh-DikuMUD/1.0\r\n"
         "\r\n",
         host, port, key);
     

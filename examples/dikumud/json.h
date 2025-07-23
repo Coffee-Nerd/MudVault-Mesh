@@ -1,5 +1,5 @@
 /*
- * Simple JSON Header for OpenIMC DikuMUD Integration
+ * Simple JSON Header for MudVault Mesh DikuMUD Integration
  */
 
 #ifndef JSON_H

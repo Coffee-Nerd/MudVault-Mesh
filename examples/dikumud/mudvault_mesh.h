@@ -8,7 +8,7 @@
 #ifndef MUDVAULT_MESH_H
 #define MUDVAULT_MESH_H
 
-#include "mvm_config.h"
+#include "imc_config.h"
 
 /* Standard includes */
 #include <stdio.h>
@@ -387,4 +387,4 @@ DO_FUN(do_imcdebug);
 #define IMC_ERR_NETWORK         -9
 #define IMC_ERR_MEMORY          -10
 
-#endif /* OPENIMC_H */
+#endif /* MUDVAULT_MESH_H */

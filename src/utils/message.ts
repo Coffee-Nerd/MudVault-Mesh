@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { OpenIMCMessage, MessageType, MessageEndpoint, MessagePayload, MessageMetadata } from '../types';
+import { MudVaultMessage, MessageType, MessageEndpoint, MessagePayload, MessageMetadata } from '../types';
 
 export function createMessage(
   type: MessageType,
@@ -7,7 +7,7 @@ export function createMessage(
   to: MessageEndpoint,
   payload: MessagePayload,
   metadata?: Partial<MessageMetadata>
-): OpenIMCMessage {
+): MudVaultMessage {
   const defaultMetadata: MessageMetadata = {
     priority: 5,
     ttl: 300,
@@ -34,7 +34,7 @@ export function createErrorMessage(
   code: number,
   message: string,
   details?: any
-): OpenIMCMessage {
+): MudVaultMessage {
   return createMessage(
     'error',
     from,
@@ -47,7 +47,7 @@ export function createErrorMessage(
   );
 }
 
-export function createPingMessage(from: MessageEndpoint, to: MessageEndpoint): OpenIMCMessage {
+export function createPingMessage(from: MessageEndpoint, to: MessageEndpoint): MudVaultMessage {
   return createMessage(
     'ping',
     from,
@@ -58,7 +58,7 @@ export function createPingMessage(from: MessageEndpoint, to: MessageEndpoint): O
   );
 }
 
-export function createPongMessage(from: MessageEndpoint, to: MessageEndpoint, originalTimestamp: number): OpenIMCMessage {
+export function createPongMessage(from: MessageEndpoint, to: MessageEndpoint, originalTimestamp: number): MudVaultMessage {
   return createMessage(
     'pong',
     from,
@@ -73,7 +73,7 @@ export function createTellMessage(
   from: MessageEndpoint,
   to: MessageEndpoint,
   message: string
-): OpenIMCMessage {
+): MudVaultMessage {
   return createMessage(
     'tell',
     from,
@@ -89,7 +89,7 @@ export function createChannelMessage(
   channel: string,
   message: string,
   action: 'join' | 'leave' | 'message' | 'list' = 'message'
-): OpenIMCMessage {
+): MudVaultMessage {
   return createMessage(
     'channel',
     from,
@@ -102,7 +102,7 @@ export function createChannelMessage(
   );
 }
 
-export function createWhoRequestMessage(from: MessageEndpoint, targetMud: string): OpenIMCMessage {
+export function createWhoRequestMessage(from: MessageEndpoint, targetMud: string): MudVaultMessage {
   return createMessage(
     'who',
     from,
@@ -117,7 +117,7 @@ export function createFingerRequestMessage(
   from: MessageEndpoint,
   targetMud: string,
   targetUser: string
-): OpenIMCMessage {
+): MudVaultMessage {
   return createMessage(
     'finger',
     from,
@@ -132,7 +132,7 @@ export function createFingerRequestMessage(
 export function createLocateRequestMessage(
   from: MessageEndpoint,
   targetUser: string
-): OpenIMCMessage {
+): MudVaultMessage {
   return createMessage(
     'locate',
     from,
@@ -144,7 +144,7 @@ export function createLocateRequestMessage(
   );
 }
 
-export function isExpired(message: OpenIMCMessage): boolean {
+export function isExpired(message: MudVaultMessage): boolean {
   const messageTime = new Date(message.timestamp).getTime();
   const now = Date.now();
   const ttlMs = message.metadata.ttl * 1000;
@@ -152,7 +152,7 @@ export function isExpired(message: OpenIMCMessage): boolean {
   return (now - messageTime) > ttlMs;
 }
 
-export function shouldRetry(message: OpenIMCMessage, attempts: number = 0): boolean {
+export function shouldRetry(message: MudVaultMessage, attempts: number = 0): boolean {
   if (!message.metadata.retry) {
     return false;
   }
@@ -161,7 +161,7 @@ export function shouldRetry(message: OpenIMCMessage, attempts: number = 0): bool
   return attempts < maxRetries && !isExpired(message);
 }
 
-export function formatMessageForDisplay(message: OpenIMCMessage): string {
+export function formatMessageForDisplay(message: MudVaultMessage): string {
   switch (message.type) {
     case 'tell':
       return `${message.from.user}@${message.from.mud} tells you: ${(message.payload as any).message}`;

@@ -1,5 +1,5 @@
 /*
- * Simple JSON Parser/Generator for OpenIMC DikuMUD Integration
+ * Simple JSON Parser/Generator for MudVault Mesh DikuMUD Integration
  * 
  * This is a minimal JSON implementation to avoid external dependencies.
  * For production use, consider using a full JSON library like cJSON.
@@ -8,7 +8,7 @@
 #include "sysdep.h"
 #include "structs.h"
 #include "utils.h"
-#include "openimc.h"
+#include "mudvault_mesh.h"
 
 /* =================================================================== */
 /* JSON PARSING FUNCTIONS                                             */

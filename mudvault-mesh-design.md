@@ -1,8 +1,8 @@
-# OpenIMC: Modern Inter-MUD Communication Protocol Design Document
+# MudVault Mesh: Modern Inter-MUD Communication Protocol Design Document
 
 ## Executive Summary
 
-OpenIMC is a next-generation inter-MUD communication protocol designed to surpass IMC3 in every aspect while maintaining backward compatibility where feasible. It leverages modern technologies, provides enhanced security, supports multiple transport mechanisms, and enables rich media sharing between MUD servers.
+MudVault Mesh is a next-generation inter-MUD communication protocol designed to surpass IMC3 in every aspect while maintaining backward compatibility where feasible. It leverages modern technologies, provides enhanced security, supports multiple transport mechanisms, and enables rich media sharing between MUD servers.
 
 ## Core Design Principles
 
@@ -40,7 +40,7 @@ OpenIMC is a next-generation inter-MUD communication protocol designed to surpas
 ```
 ┌─────────────────┐     ┌─────────────────┐
 │   MUD Server    │     │   MUD Server    │
-│   (OpenIMC)     │────▶│   (OpenIMC)     │
+│  (MudVault)     │────▶│  (MudVault)     │
 └────────┬────────┘     └────────┬────────┘
          │                       │
          ▼                       ▼
@@ -242,7 +242,7 @@ WS     /ws/v1/stream             - WebSocket connection
 ## Migration Strategy
 
 ### From IMC3
-1. Deploy OpenIMC alongside IMC3
+1. Deploy MudVault Mesh alongside IMC3
 2. Bridge messages between protocols
 3. Gradually migrate services
 4. Deprecate IMC3 after 6 months
@@ -307,11 +307,11 @@ WS     /ws/v1/stream             - WebSocket connection
 
 ## Conclusion
 
-OpenIMC represents a quantum leap forward in inter-MUD communication, bringing modern web technologies, enhanced security, and rich features to the MUD community while respecting the legacy of protocols like IMC3. With careful planning and community involvement, OpenIMC can become the standard for MUD interconnection for the next decade.
+MudVault Mesh represents a quantum leap forward in inter-MUD communication, bringing modern web technologies, enhanced security, and rich features to the MUD community while respecting the legacy of protocols like IMC3. With careful planning and community involvement, MudVault Mesh can become the standard for MUD interconnection for the next decade.
 
 ## Appendix: Comparison Table
 
-| Feature | IMC3 | OpenIMC |
+| Feature | IMC3 | MudVault Mesh |
 |---------|------|---------|
 | Protocol | LPC/Mudmode | JSON/REST/WebSocket |
 | Security | Basic | TLS 1.3 + OAuth |

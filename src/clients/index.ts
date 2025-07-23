@@ -1,2 +1,2 @@
-export { OpenIMCClient } from './nodejs';
-export type { OpenIMCClientOptions, ConnectionState } from './nodejs';
+export { MudVaultClient } from './nodejs';
+export type { MudVaultClientOptions, ConnectionState } from './nodejs';

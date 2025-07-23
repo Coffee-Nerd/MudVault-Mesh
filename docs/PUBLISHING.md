@@ -329,5 +329,5 @@ await client.connect()  # Connects to mesh.mudvault.org
 For publishing issues:
 - **npm**: https://docs.npmjs.com/cli/v9/commands/npm-publish
 - **PyPI**: https://packaging.python.org/en/latest/tutorials/packaging-projects/
-- **GitHub Issues**: https://github.com/Coffee-Nerd/OpenIMC/issues
+- **GitHub Issues**: https://github.com/Coffee-Nerd/MudVault-Mesh/issues
 - **Discord**: https://discord.gg/r6kM56YrEV

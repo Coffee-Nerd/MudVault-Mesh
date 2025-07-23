@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { OpenIMCMessage, MessageType } from '../types';
+import { MudVaultMessage, MessageType } from '../types';
 
 const messageEndpointSchema = Joi.object({
   mud: Joi.string().required(),
@@ -105,7 +105,7 @@ const messageSchema = Joi.object({
   metadata: messageMetadataSchema.required()
 });
 
-export function validateMessage(message: any): { error?: string; value?: OpenIMCMessage } {
+export function validateMessage(message: any): { error?: string; value?: MudVaultMessage } {
   const { error, value } = messageSchema.validate(message, { allowUnknown: false });
   
   if (error) {
@@ -123,7 +123,7 @@ export function validateMessage(message: any): { error?: string; value?: OpenIMC
   }
 
   value.payload = payloadValidation.value;
-  return { value: value as OpenIMCMessage };
+  return { value: value as MudVaultMessage };
 }
 
 export function validateMudName(mudName: string): boolean {
