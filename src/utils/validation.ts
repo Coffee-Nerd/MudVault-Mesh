@@ -22,7 +22,7 @@ const basePayloadSchema = Joi.object({
 });
 
 const tellPayloadSchema = basePayloadSchema.keys({
-  message: Joi.string().max(4096).required()
+  message: Joi.string().max(4096).allow('').required()
 });
 
 const emotePayloadSchema = Joi.object({
@@ -33,7 +33,7 @@ const emotePayloadSchema = Joi.object({
 
 const channelPayloadSchema = Joi.object({
   channel: Joi.string().required(),
-  message: Joi.string().max(4096).optional(),
+  message: Joi.string().max(4096).allow('').optional(),
   action: Joi.string().valid('join', 'leave', 'message', 'list').optional(),
   formatted: Joi.string().max(8192).optional()
 });
