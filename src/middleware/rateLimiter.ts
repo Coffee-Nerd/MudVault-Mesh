@@ -35,25 +35,25 @@ const rateLimiterConfigs = {
   auth: new RateLimiterRedis({
     storeClient: redisClient,
     keyPrefix: 'rl_auth',
-    points: 5, // Very restrictive for auth attempts
+    points: 20, // More reasonable for auth attempts
     duration: 300, // 5 minutes
-    blockDuration: 900, // 15 minutes block
+    blockDuration: 300, // 5 minutes block instead of 15
   }),
 
   // WebSocket connection rate limiter
   websocket: new RateLimiterRedis({
     storeClient: redisClient,
     keyPrefix: 'rl_ws',
-    points: 10, // 10 connections per IP
+    points: 25, // 25 connections per IP (better for MUD reconnections)
     duration: 60,
-    blockDuration: 300,
+    blockDuration: 120, // 2 minute block instead of 5
   }),
 
   // Message rate limiter (for WebSocket messages)
   message: new RateLimiterRedis({
     storeClient: redisClient,
     keyPrefix: 'rl_msg',
-    points: 100, // 100 messages per minute per MUD
+    points: 300, // 300 messages per minute per MUD (more generous)
     duration: 60,
     blockDuration: 60,
   }),
@@ -62,9 +62,9 @@ const rateLimiterConfigs = {
   channel: new RateLimiterRedis({
     storeClient: redisClient,
     keyPrefix: 'rl_channel',
-    points: 50, // 50 channel messages per minute
+    points: 150, // 150 channel messages per minute (more generous)
     duration: 60,
-    blockDuration: 120,
+    blockDuration: 60,
   }),
 
   // Tell message rate limiter
