@@ -115,13 +115,26 @@ async function startServer() {
     let discordService: DiscordService | null = null;
     if (process.env.DISCORD_ENABLED === 'true') {
       logger.info('Initializing Discord service...');
+      // Build channel mappings from environment variables
+      const channelMappings: { [key: string]: string } = {};
+      const channels = (process.env.DISCORD_CHANNELS || 'ooc,chat').split(',');
+      
+      for (const channel of channels) {
+        const envVar = `DISCORD_CHANNEL_${channel.toUpperCase()}`;
+        const channelId = process.env[envVar];
+        if (channelId) {
+          channelMappings[channel] = channelId;
+        }
+      }
+
       const discordConfig = {
         enabled: true,
         token: process.env.DISCORD_TOKEN!,
         guildId: process.env.DISCORD_GUILD_ID!,
         bridgeChannelId: process.env.DISCORD_BRIDGE_CHANNEL_ID!,
+        channelMappings: channelMappings,
         mudName: process.env.DISCORD_MUD_NAME || 'DiscordBridge',
-        channels: (process.env.DISCORD_CHANNELS || 'ooc,chat').split(','),
+        channels: channels,
         requireVerification: process.env.DISCORD_REQUIRE_VERIFICATION === 'true',
         rateLimitMessages: parseInt(process.env.DISCORD_RATE_LIMIT_MESSAGES || '10'),
         rateLimitCommands: parseInt(process.env.DISCORD_RATE_LIMIT_COMMANDS || '5')

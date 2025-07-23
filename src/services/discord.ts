@@ -9,6 +9,7 @@ interface DiscordConfig {
   token: string;
   guildId: string;
   bridgeChannelId: string;
+  channelMappings: { [mudChannel: string]: string }; // MUD channel -> Discord channel ID
   mudName: string;
   channels: string[];
   requireVerification: boolean;
@@ -164,8 +165,13 @@ export class DiscordService extends EventEmitter {
   }
 
   private async handleDiscordMessage(message: any): Promise<void> {
-    // Only process messages from the bridge channel
-    if (message.channel.id !== this.config.bridgeChannelId) return;
+    // Check if message is from any of our configured channels
+    const channelId = message.channel.id;
+    const isBridgeChannel = channelId === this.config.bridgeChannelId;
+    const mudChannel = this.getMudChannelFromDiscordId(channelId);
+    
+    // Only process messages from bridge channel or mapped channels
+    if (!isBridgeChannel && !mudChannel) return;
     if (message.author.bot) return;
 
     // Check if user is verified
@@ -198,9 +204,12 @@ export class DiscordService extends EventEmitter {
 
     await message.channel.send({ embeds: [embed] });
 
+    // Determine which MUD channel to send to
+    const targetChannel = mudChannel || this.config.channels[0]; // Default to first channel if from bridge
+    
     // Send to MudVault network
     this.imcClient.sendChannelMessage(
-      this.config.channels[0], // Default to first channel
+      targetChannel,
       message.content,
       mapping.mudUsername
     );
@@ -210,9 +219,12 @@ export class DiscordService extends EventEmitter {
     // Don't echo our own messages
     if (message.from.mud === this.config.mudName) return;
 
-    const channel = this.discordClient.channels.cache.get(this.config.bridgeChannelId);
-    if (!channel || channel.type !== ChannelType.GuildText) return;
-
+    const mudChannelName = message.to.channel || 'chat';
+    
+    // Get specific Discord channel for this MUD channel
+    const specificChannelId = this.config.channelMappings[mudChannelName];
+    const bridgeChannelId = this.config.bridgeChannelId;
+    
     // Convert ANSI colors and create embed
     const formattedContent = this.convertAnsiToDiscord((message.payload as any).message);
     
@@ -225,11 +237,37 @@ export class DiscordService extends EventEmitter {
       .setDescription(`\`\`\`ansi\n${formattedContent}\n\`\`\``)
       .setTimestamp(new Date(message.timestamp))
       .setFooter({
-        text: `#${message.to.channel || 'chat'}`
+        text: `#${mudChannelName}`
       })
-      .setColor(this.getChannelColor(message.to.channel || 'chat'));
+      .setColor(this.getChannelColor(mudChannelName));
 
-    await channel.send({ embeds: [embed] });
+    // Send to specific channel if mapped
+    if (specificChannelId) {
+      const specificChannel = this.discordClient.channels.cache.get(specificChannelId);
+      if (specificChannel && specificChannel.type === ChannelType.GuildText) {
+        await specificChannel.send({ embeds: [embed] });
+      }
+    }
+    
+    // Always send to bridge channel as well (admin overview)
+    const bridgeChannel = this.discordClient.channels.cache.get(bridgeChannelId);
+    if (bridgeChannel && bridgeChannel.type === ChannelType.GuildText) {
+      // Add channel prefix for bridge channel to show which channel it's from
+      const bridgeEmbed = new EmbedBuilder()
+        .setAuthor({
+          name: message.from.mud,
+          iconURL: 'https://cdn.discordapp.com/emojis/🌍.png'
+        })
+        .setTitle(`[#${mudChannelName}] ${message.from.user || 'Unknown'}`)
+        .setDescription(`\`\`\`ansi\n${formattedContent}\n\`\`\``)
+        .setTimestamp(new Date(message.timestamp))
+        .setFooter({
+          text: `from #${mudChannelName}`
+        })
+        .setColor(this.getChannelColor(mudChannelName));
+        
+      await bridgeChannel.send({ embeds: [bridgeEmbed] });
+    }
   }
 
   private async handleIMCTellMessage(message: MudVaultMessage): Promise<void> {
@@ -439,5 +477,14 @@ export class DiscordService extends EventEmitter {
     }
 
     return embed;
+  }
+
+  private getMudChannelFromDiscordId(discordChannelId: string): string | null {
+    for (const [mudChannel, discordId] of Object.entries(this.config.channelMappings)) {
+      if (discordId === discordChannelId) {
+        return mudChannel;
+      }
+    }
+    return null;
   }
 }
