@@ -110,7 +110,7 @@ export class AuthService {
       const payload = jwt.verify(token, JWT_SECRET) as JWTPayload;
       return payload;
     } catch (error) {
-      logger.warn('Invalid JWT token:', error.message);
+      logger.warn('Invalid JWT token:', error instanceof Error ? error.message : 'Unknown error');
       return null;
     }
   }

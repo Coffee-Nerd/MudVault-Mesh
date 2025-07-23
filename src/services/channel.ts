@@ -80,7 +80,7 @@ export class ChannelService extends EventEmitter {
       throw new Error(`User ${userKey} is banned from channel ${channelName}`);
     }
 
-    if (channel.mudRestricted && channel.allowedMuds.length > 0) {
+    if (channel.mudRestricted && channel.allowedMuds && channel.allowedMuds.length > 0) {
       if (!channel.allowedMuds.includes(user.mud)) {
         throw new Error(`MUD ${user.mud} is not allowed in channel ${channelName}`);
       }

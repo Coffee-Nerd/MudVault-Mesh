@@ -85,10 +85,10 @@ export function createRateLimitMiddleware(limiterType: keyof typeof rateLimiterC
     try {
       await limiter.consume(key);
       next();
-    } catch (rateLimiterRes) {
-      const remainingPoints = rateLimiterRes.remainingPoints || 0;
-      const totalHits = rateLimiterRes.totalHits || 0;
-      const msBeforeNext = rateLimiterRes.msBeforeNext || 0;
+    } catch (rateLimiterRes: any) {
+      const remainingPoints = rateLimiterRes?.remainingPoints || 0;
+      const totalHits = rateLimiterRes?.totalHits || 0;
+      const msBeforeNext = rateLimiterRes?.msBeforeNext || 0;
 
       res.set({
         'Retry-After': Math.round(msBeforeNext / 1000) || 1,
@@ -113,13 +113,13 @@ function getKey(req: Request, limiterType: string): string {
   
   switch (limiterType) {
     case 'mud':
-      return authReq.mud?.name || req.ip;
+      return authReq.mud?.name || req.ip || 'unknown';
     case 'auth':
-      return req.ip;
+      return req.ip || 'unknown';
     case 'api':
-      return authReq.mud?.name || req.ip;
+      return authReq.mud?.name || req.ip || 'unknown';
     default:
-      return req.ip;
+      return req.ip || 'unknown';
   }
 }
 

@@ -29,7 +29,7 @@ router.post('/auth/register', authRateLimit, async (req, res) => {
     });
   } catch (error) {
     logger.error('Error registering MUD:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
 
@@ -185,7 +185,7 @@ router.post('/channels/:name/join', authenticate, mudRateLimit, async (req: Auth
     });
   } catch (error) {
     logger.error(`Error joining channel ${req.params.name}:`, error);
-    res.status(400).json({ error: error.message });
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
 
@@ -213,7 +213,7 @@ router.post('/channels/:name/leave', authenticate, mudRateLimit, async (req: Aut
     });
   } catch (error) {
     logger.error(`Error leaving channel ${req.params.name}:`, error);
-    res.status(400).json({ error: error.message });
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
 
@@ -241,7 +241,7 @@ router.post('/channels/:name/message', authenticate, mudRateLimit, async (req: A
     });
   } catch (error) {
     logger.error(`Error sending message to channel ${req.params.name}:`, error);
-    res.status(400).json({ error: error.message });
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
 
