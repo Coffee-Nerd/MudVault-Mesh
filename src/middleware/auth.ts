@@ -71,8 +71,9 @@ export class AuthService {
     // If not in memory cache, try to load from Redis
     if (!hashedKey) {
       try {
-        hashedKey = await redisService.get(`api_key:${mudName}`);
-        if (hashedKey) {
+        const redisKey = await redisService.get(`api_key:${mudName}`);
+        if (redisKey) {
+          hashedKey = redisKey;
           this.apiKeys.set(mudName, hashedKey);
           logger.info(`Loaded API key for ${mudName} from Redis`);
         } else {
