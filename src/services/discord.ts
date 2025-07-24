@@ -167,12 +167,14 @@ export class DiscordService extends EventEmitter {
       if (message.type === 'tell' && (message.payload as any).message?.startsWith('DISCORD_VERIFY:')) {
         const parts = (message.payload as any).message.split(':');
         if (parts.length >= 2) {
+          const code = parts[1].toUpperCase(); // Make case-insensitive
           this.logger.debug('DEBUG: Processing Discord verification', {
-            code: parts[1],
+            originalCode: parts[1],
+            normalizedCode: code,
             mudName: message.from.mud,
             username: message.from.user
           });
-          this.handleMudVerification(parts[1], message.from.mud!, message.from.user!);
+          this.handleMudVerification(code, message.from.mud!, message.from.user!);
         }
       }
     });
@@ -470,13 +472,46 @@ export class DiscordService extends EventEmitter {
   }
 
   private async handleMudVerification(code: string, mudName: string, username: string): Promise<void> {
+    this.logger.debug('DEBUG: Attempting verification', {
+      code,
+      mudName,
+      username,
+      availableCodes: Array.from(this.verificationCodes.keys())
+    });
+
     const verification = this.verificationCodes.get(code);
-    if (!verification || verification.expires < new Date()) {
+    if (!verification) {
+      this.logger.debug('DEBUG: Verification code not found', { code });
+      // Send error message to MUD
+      try {
+        await this.imcClient.sendTell({ mud: mudName, user: username }, 'Verification code not found or expired. Please try /verify again in Discord.');
+      } catch (error) {
+        this.logger.error('Failed to send verification error to MUD:', error);
+      }
+      return;
+    }
+
+    if (verification.expires < new Date()) {
+      this.logger.debug('DEBUG: Verification code expired', { code, expires: verification.expires });
       this.verificationCodes.delete(code);
+      try {
+        await this.imcClient.sendTell({ mud: mudName, user: username }, 'Verification code expired. Please try /verify again in Discord.');
+      } catch (error) {
+        this.logger.error('Failed to send verification expiry message to MUD:', error);
+      }
       return;
     }
 
     if (verification.mudName !== mudName || verification.mudUsername !== username) {
+      this.logger.debug('DEBUG: Verification details mismatch', {
+        expected: { mudName: verification.mudName, username: verification.mudUsername },
+        received: { mudName, username }
+      });
+      try {
+        await this.imcClient.sendTell({ mud: mudName, user: username }, `Verification failed: Expected MUD "${verification.mudName}" and character "${verification.mudUsername}"`);
+      } catch (error) {
+        this.logger.error('Failed to send verification mismatch message to MUD:', error);
+      }
       return;
     }
 
@@ -492,10 +527,19 @@ export class DiscordService extends EventEmitter {
     this.userMappings.set(verification.discordId, mapping);
     this.verificationCodes.delete(code);
 
-    // Send confirmation to MUD
-    this.imcClient.sendTell({ mud: mudName, user: username }, 'Your Discord account has been successfully linked!');
+    this.logger.info('DEBUG: User successfully verified', { 
+      discordId: verification.discordId, 
+      mudName, 
+      username,
+      totalMappings: this.userMappings.size 
+    });
 
-    this.logger.info('User verified', { discordId: verification.discordId, mudName, username });
+    // Send confirmation to MUD
+    try {
+      await this.imcClient.sendTell({ mud: mudName, user: username }, 'Your Discord account has been successfully linked! You can now chat through Discord.');
+    } catch (error) {
+      this.logger.error('Failed to send verification success message to MUD:', error);
+    }
   }
 
   private async handleWhoCommand(interaction: any): Promise<void> {
