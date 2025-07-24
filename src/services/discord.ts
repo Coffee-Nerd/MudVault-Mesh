@@ -484,7 +484,7 @@ export class DiscordService extends EventEmitter {
       this.logger.debug('DEBUG: Verification code not found', { code });
       // Send error message to MUD
       try {
-        await this.imcClient.sendTell({ mud: mudName, user: username }, 'Verification code not found or expired. Please try /verify again in Discord.');
+        this.imcClient.sendTell({ mud: mudName, user: username }, 'Verification code not found or expired. Please try /verify again in Discord.');
       } catch (error) {
         this.logger.error('Failed to send verification error to MUD:', error);
       }
@@ -495,7 +495,7 @@ export class DiscordService extends EventEmitter {
       this.logger.debug('DEBUG: Verification code expired', { code, expires: verification.expires });
       this.verificationCodes.delete(code);
       try {
-        await this.imcClient.sendTell({ mud: mudName, user: username }, 'Verification code expired. Please try /verify again in Discord.');
+        this.imcClient.sendTell({ mud: mudName, user: username }, 'Verification code expired. Please try /verify again in Discord.');
       } catch (error) {
         this.logger.error('Failed to send verification expiry message to MUD:', error);
       }
@@ -508,7 +508,7 @@ export class DiscordService extends EventEmitter {
         received: { mudName, username }
       });
       try {
-        await this.imcClient.sendTell({ mud: mudName, user: username }, `Verification failed: Expected MUD "${verification.mudName}" and character "${verification.mudUsername}"`);
+        this.imcClient.sendTell({ mud: mudName, user: username }, `Verification failed: Expected MUD "${verification.mudName}" and character "${verification.mudUsername}"`);
       } catch (error) {
         this.logger.error('Failed to send verification mismatch message to MUD:', error);
       }
@@ -536,7 +536,7 @@ export class DiscordService extends EventEmitter {
 
     // Send confirmation to MUD
     try {
-      await this.imcClient.sendTell({ mud: mudName, user: username }, 'Your Discord account has been successfully linked! You can now chat through Discord.');
+      this.imcClient.sendTell({ mud: mudName, user: username }, 'Your Discord account has been successfully linked! You can now chat through Discord.');
     } catch (error) {
       this.logger.error('Failed to send verification success message to MUD:', error);
     }
