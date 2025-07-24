@@ -314,7 +314,7 @@ export class DiscordService extends EventEmitter {
       return;
     }
 
-    const rawChannelName = message.to.channel || 'chat';
+    const rawChannelName = (message.payload as any).channel || 'chat';
     const mudChannelName = this.normalizeChannelName(rawChannelName);
     
     // Get specific Discord channel for this MUD channel
