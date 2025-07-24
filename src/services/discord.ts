@@ -91,13 +91,31 @@ export class DiscordService extends EventEmitter {
   private setupDiscordEvents(): void {
     this.discordClient.on('ready', () => {
       this.logger.info(`Discord bot logged in as ${this.discordClient.user?.tag}`);
+      this.logger.debug(`DEBUG: Discord bot ready, monitoring ${Object.keys(this.config.channelMappings).length} channel mappings`);
+      this.logger.debug(`DEBUG: Channel mappings:`, this.config.channelMappings);
     });
 
     this.discordClient.on('messageCreate', async (message) => {
+      this.logger.debug(`DEBUG: Discord message received`, {
+        channelId: message.channel.id,
+        channelName: message.channel.type === ChannelType.GuildText ? message.channel.name : 'DM',
+        author: message.author.username,
+        content: message.content.substring(0, 100) + (message.content.length > 100 ? '...' : ''),
+        isBot: message.author.bot,
+        isBridge: message.channel.id === this.config.bridgeChannelId,
+        isMapped: this.getMudChannelFromDiscordId(message.channel.id) !== null
+      });
+      
       await this.handleDiscordMessage(message);
     });
 
     this.discordClient.on('interactionCreate', async (interaction) => {
+      this.logger.debug(`DEBUG: Discord interaction received`, {
+        type: interaction.type,
+        user: interaction.user.username,
+        isCommand: interaction.isChatInputCommand()
+      });
+      
       if (interaction.isChatInputCommand()) {
         await this.handleSlashCommand(interaction);
       }
@@ -107,29 +125,64 @@ export class DiscordService extends EventEmitter {
   private setupIMCEvents(): void {
     this.imcClient.on('connected', () => {
       this.logger.info('Discord service connected to MudVault');
+      this.logger.debug('DEBUG: IMC client connected, Discord can now receive MUD messages');
     });
 
     this.imcClient.on('channel', (message: MudVaultMessage) => {
+      this.logger.debug('DEBUG: IMC channel message received', {
+        from: `${message.from.user}@${message.from.mud}`,
+        channel: message.to.channel,
+        content: (message.payload as any).message?.substring(0, 100) + ((message.payload as any).message?.length > 100 ? '...' : ''),
+        timestamp: message.timestamp
+      });
       this.handleIMCChannelMessage(message);
     });
 
     this.imcClient.on('tell', (message: MudVaultMessage) => {
+      this.logger.debug('DEBUG: IMC tell message received', {
+        from: `${message.from.user}@${message.from.mud}`,
+        to: `${message.to.user}@${message.to.mud}`,
+        content: (message.payload as any).message?.substring(0, 100) + ((message.payload as any).message?.length > 100 ? '...' : ''),
+      });
       this.handleIMCTellMessage(message);
     });
 
     this.imcClient.on('who', (message: MudVaultMessage) => {
+      this.logger.debug('DEBUG: IMC who response received', {
+        from: message.from.mud,
+        userCount: (message.payload as any).users?.length || 0
+      });
       this.handleIMCWhoResponse(message);
     });
 
     // Handle verification from MUD side  
     this.imcClient.on('message', (message: MudVaultMessage) => {
+      this.logger.debug('DEBUG: Raw IMC message received', {
+        type: message.type,
+        from: `${message.from.user}@${message.from.mud}`,
+        to: message.to
+      });
+      
       // Handle verification via tell messages with special format
       if (message.type === 'tell' && (message.payload as any).message?.startsWith('DISCORD_VERIFY:')) {
         const parts = (message.payload as any).message.split(':');
         if (parts.length >= 2) {
+          this.logger.debug('DEBUG: Processing Discord verification', {
+            code: parts[1],
+            mudName: message.from.mud,
+            username: message.from.user
+          });
           this.handleMudVerification(parts[1], message.from.mud!, message.from.user!);
         }
       }
+    });
+
+    this.imcClient.on('error', (error) => {
+      this.logger.error('DEBUG: IMC client error:', error);
+    });
+
+    this.imcClient.on('disconnect', () => {
+      this.logger.warn('DEBUG: IMC client disconnected');
     });
   }
 
@@ -170,13 +223,34 @@ export class DiscordService extends EventEmitter {
     const isBridgeChannel = channelId === this.config.bridgeChannelId;
     const mudChannel = this.getMudChannelFromDiscordId(channelId);
     
+    this.logger.debug('DEBUG: Processing Discord message', {
+      channelId,
+      isBridgeChannel,
+      mudChannel,
+      author: message.author.username,
+      isBot: message.author.bot
+    });
+    
     // Only process messages from bridge channel or mapped channels
-    if (!isBridgeChannel && !mudChannel) return;
-    if (message.author.bot) return;
+    if (!isBridgeChannel && !mudChannel) {
+      this.logger.debug('DEBUG: Ignoring message - not from monitored channel');
+      return;
+    }
+    if (message.author.bot) {
+      this.logger.debug('DEBUG: Ignoring message - from bot');
+      return;
+    }
 
     // Check if user is verified
     const mapping = this.userMappings.get(message.author.id);
     if (!mapping || !mapping.verified) {
+      this.logger.debug('DEBUG: User not verified', {
+        userId: message.author.id,
+        username: message.author.username,
+        hasMapping: !!mapping,
+        isVerified: mapping?.verified || false
+      });
+      
       const embed = new EmbedBuilder()
         .setColor(0xff0000)
         .setTitle('Verification Required')
@@ -186,6 +260,12 @@ export class DiscordService extends EventEmitter {
       await message.delete();
       return;
     }
+
+    this.logger.debug('DEBUG: User verified, processing message', {
+      discordUser: message.author.username,
+      mudUser: mapping.mudUsername,
+      mudName: mapping.mudName
+    });
 
     // Delete original message and create formatted embed
     await message.delete();
@@ -207,23 +287,46 @@ export class DiscordService extends EventEmitter {
     // Determine which MUD channel to send to
     const targetChannel = mudChannel || this.config.channels[0]; // Default to first channel if from bridge
     
-    // Send to MudVault network
-    this.imcClient.sendChannelMessage(
+    this.logger.debug('DEBUG: Sending Discord message to MUD network', {
       targetChannel,
-      message.content,
-      mapping.mudUsername
-    );
+      content: message.content.substring(0, 100) + (message.content.length > 100 ? '...' : ''),
+      mudUsername: mapping.mudUsername,
+      mudName: mapping.mudName
+    });
+    
+    // Send to MudVault network
+    try {
+      this.imcClient.sendChannelMessage(
+        targetChannel,
+        message.content,
+        mapping.mudUsername
+      );
+      this.logger.debug('DEBUG: Successfully sent message to MUD network');
+    } catch (error) {
+      this.logger.error('DEBUG: Failed to send message to MUD network:', error);
+    }
   }
 
   private async handleIMCChannelMessage(message: MudVaultMessage): Promise<void> {
     // Don't echo our own messages
-    if (message.from.mud === this.config.mudName) return;
+    if (message.from.mud === this.config.mudName) {
+      this.logger.debug('DEBUG: Ignoring own message echo from', message.from.mud);
+      return;
+    }
 
     const mudChannelName = message.to.channel || 'chat';
     
     // Get specific Discord channel for this MUD channel
     const specificChannelId = this.config.channelMappings[mudChannelName];
     const bridgeChannelId = this.config.bridgeChannelId;
+    
+    this.logger.debug('DEBUG: Processing MUD message for Discord', {
+      mudChannelName,
+      specificChannelId,
+      bridgeChannelId,
+      from: `${message.from.user}@${message.from.mud}`,
+      hasSpecificMapping: !!specificChannelId
+    });
     
     // Convert ANSI colors and create embed
     const formattedContent = this.convertAnsiToDiscord((message.payload as any).message);
@@ -245,13 +348,30 @@ export class DiscordService extends EventEmitter {
     if (specificChannelId) {
       const specificChannel = this.discordClient.channels.cache.get(specificChannelId);
       if (specificChannel && specificChannel.type === ChannelType.GuildText) {
+        this.logger.debug('DEBUG: Sending to specific Discord channel', {
+          channelId: specificChannelId,
+          channelName: specificChannel.name
+        });
         await specificChannel.send({ embeds: [embed] });
+      } else {
+        this.logger.warn('DEBUG: Specific channel not found or not text channel', {
+          channelId: specificChannelId,
+          found: !!specificChannel,
+          type: specificChannel?.type
+        });
       }
+    } else {
+      this.logger.debug('DEBUG: No specific channel mapping found for', mudChannelName);
     }
     
     // Always send to bridge channel as well (admin overview)
     const bridgeChannel = this.discordClient.channels.cache.get(bridgeChannelId);
     if (bridgeChannel && bridgeChannel.type === ChannelType.GuildText) {
+      this.logger.debug('DEBUG: Sending to bridge channel', {
+        channelId: bridgeChannelId,
+        channelName: bridgeChannel.name
+      });
+      
       // Add channel prefix for bridge channel to show which channel it's from
       const bridgeEmbed = new EmbedBuilder()
         .setAuthor({
@@ -267,6 +387,13 @@ export class DiscordService extends EventEmitter {
         .setColor(this.getChannelColor(mudChannelName));
         
       await bridgeChannel.send({ embeds: [bridgeEmbed] });
+      this.logger.debug('DEBUG: Successfully sent to bridge channel');
+    } else {
+      this.logger.warn('DEBUG: Bridge channel not found or not text channel', {
+        channelId: bridgeChannelId,
+        found: !!bridgeChannel,
+        type: bridgeChannel?.type
+      });
     }
   }
 
