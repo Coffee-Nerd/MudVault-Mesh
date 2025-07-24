@@ -66,9 +66,22 @@ export class AuthService {
   }
 
   public async validateApiKey(mudName: string, apiKey: string): Promise<boolean> {
-    const hashedKey = this.apiKeys.get(mudName);
+    let hashedKey = this.apiKeys.get(mudName);
+    
+    // If not in memory cache, try to load from Redis
     if (!hashedKey) {
-      return false;
+      try {
+        hashedKey = await redisService.get(`api_key:${mudName}`);
+        if (hashedKey) {
+          this.apiKeys.set(mudName, hashedKey);
+          logger.info(`Loaded API key for ${mudName} from Redis`);
+        } else {
+          return false;
+        }
+      } catch (error) {
+        logger.error(`Error loading API key for ${mudName} from Redis:`, error);
+        return false;
+      }
     }
 
     try {
