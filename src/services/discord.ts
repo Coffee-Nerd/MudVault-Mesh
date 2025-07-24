@@ -314,7 +314,8 @@ export class DiscordService extends EventEmitter {
       return;
     }
 
-    const mudChannelName = message.to.channel || 'chat';
+    const rawChannelName = message.to.channel || 'chat';
+    const mudChannelName = this.normalizeChannelName(rawChannelName);
     
     // Get specific Discord channel for this MUD channel
     const specificChannelId = this.config.channelMappings[mudChannelName];
@@ -613,5 +614,28 @@ export class DiscordService extends EventEmitter {
       }
     }
     return null;
+  }
+
+  /**
+   * Normalize channel names to handle variations like "goss" -> "gossip"
+   */
+  private normalizeChannelName(channelName: string): string {
+    const channelMappings: { [key: string]: string } = {
+      'goss': 'gossip',
+      'gossip': 'gossip',
+      'ooc': 'ooc',
+      'chat': 'chat',
+      'general': 'chat'
+    };
+
+    const normalized = channelMappings[channelName.toLowerCase()];
+    if (normalized) {
+      this.logger.debug(`DEBUG: Channel normalized: ${channelName} -> ${normalized}`);
+      return normalized;
+    }
+
+    // If no mapping found, return original and log it
+    this.logger.debug(`DEBUG: No channel mapping for: ${channelName}, using as-is`);
+    return channelName;
   }
 }

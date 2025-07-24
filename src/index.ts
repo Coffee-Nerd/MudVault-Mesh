@@ -117,13 +117,16 @@ async function startServer() {
       logger.info('Initializing Discord service...');
       // Build channel mappings from environment variables
       const channelMappings: { [key: string]: string } = {};
-      const channels = (process.env.DISCORD_CHANNELS || 'ooc,chat').split(',');
+      const channels = (process.env.DISCORD_CHANNELS || 'gossip,ooc,chat').split(',');
       
       for (const channel of channels) {
         const envVar = `DISCORD_CHANNEL_${channel.toUpperCase()}`;
         const channelId = process.env[envVar];
         if (channelId) {
           channelMappings[channel] = channelId;
+          console.log(`DEBUG: Mapped channel ${channel} -> Discord channel ${channelId}`);
+        } else {
+          console.warn(`WARNING: No Discord channel ID found for ${channel} (looking for ${envVar})`);
         }
       }
 
