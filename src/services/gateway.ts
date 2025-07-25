@@ -2,7 +2,7 @@ import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { MudVaultMessage, ConnectionInfo, MudInfo, ErrorCodes } from '../types';
 import { validateMessage } from '../utils/validation';
-import { createErrorMessage, createPongMessage, isExpired } from '../utils/message';
+import { createErrorMessage, createPongMessage, createMessage, isExpired } from '../utils/message';
 import logger from '../utils/logger';
 import redisService from './redis';
 
@@ -253,6 +253,20 @@ export class Gateway extends EventEmitter {
       totalConnectedMuds: this.mudInfo.size,
       authenticationTime: `${Math.round((Date.now() - connection.connected.getTime()) / 1000)}s`
     });
+
+    // Send authentication success response
+    const authSuccessMessage = createMessage(
+      'auth',
+      { mud: 'Gateway' },
+      { mud: mudName },
+      {
+        mudName: mudName,
+        response: 'Authentication successful'
+      },
+      { priority: 10 }
+    );
+
+    await this.sendMessage(connectionId, authSuccessMessage);
     
     this.emit('mudConnected', { mudName, connectionId });
   }
