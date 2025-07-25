@@ -131,7 +131,10 @@ export class Gateway extends EventEmitter {
           mudName: connection.mudName || 'Unauthenticated',
           error: validation.error,
           messageType: messageData.type || 'Unknown',
-          messageId: messageData.id || 'No ID'
+          messageId: messageData.id || 'No ID',
+          messageSize: messageText.length,
+          rawMessage: messageText.substring(0, 1000),
+          parsedData: JSON.stringify(messageData, null, 2).substring(0, 1000)
         });
         this.sendError(connectionId, ErrorCodes.INVALID_MESSAGE, validation.error);
         return;
@@ -429,22 +432,54 @@ export class Gateway extends EventEmitter {
 
   private async sendMessage(connectionId: string, message: MudVaultMessage): Promise<void> {
     const ws = this.connections.get(connectionId);
+    const connection = this.connectionInfo.get(connectionId);
+    
     if (!ws || ws.readyState !== WebSocket.OPEN) {
+      logger.warn(`⚠️ CANNOT SEND - Connection not ready: ${connectionId}`, {
+        hasWebSocket: !!ws,
+        readyState: ws?.readyState,
+        mudName: connection?.mudName || 'Unknown'
+      });
       return;
     }
 
     try {
-      ws.send(JSON.stringify(message));
+      const messageJson = JSON.stringify(message);
+      const messageSize = Buffer.byteLength(messageJson, 'utf8');
+      
+      logger.debug(`📤 OUTGOING MESSAGE: ${connectionId}`, {
+        mudName: connection?.mudName || 'Unknown',
+        messageType: message.type,
+        messageId: message.id,
+        messageSize,
+        to: message.to.user ? `${message.to.user}@${message.to.mud}` : message.to.mud,
+        isError: message.type === 'error'
+      });
+
+      ws.send(messageJson);
     } catch (error) {
-      logger.error(`Error sending message to ${connectionId}:`, error);
+      logger.error(`❌ SEND ERROR: ${connectionId}`, {
+        mudName: connection?.mudName || 'Unknown',
+        messageType: message.type,
+        messageId: message.id,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   }
 
   private sendError(connectionId: string, code: ErrorCodes, message: string): void {
     const connection = this.connectionInfo.get(connectionId);
     if (!connection) {
+      logger.warn(`⚠️ CANNOT SEND ERROR - Connection not found: ${connectionId}`);
       return;
     }
+
+    logger.warn(`🚨 SENDING ERROR: ${connectionId}`, {
+      mudName: connection.mudName || 'Unauthenticated',
+      errorCode: code,
+      errorMessage: message,
+      remoteAddress: connection.host
+    });
 
     const errorMessage = createErrorMessage(
       { mud: 'Gateway' },
