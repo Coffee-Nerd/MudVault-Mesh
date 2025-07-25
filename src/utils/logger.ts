@@ -4,8 +4,15 @@ import path from 'path';
 const logFormat = winston.format.combine(
   winston.format.timestamp(),
   winston.format.errors({ stack: true }),
-  winston.format.printf(({ timestamp, level, message, stack }) => {
-    return `${timestamp} [${level.toUpperCase()}]: ${stack || message}`;
+  winston.format.printf(({ timestamp, level, message, stack, ...meta }) => {
+    let logMessage = `${timestamp} [${level.toUpperCase()}]: ${stack || message}`;
+    
+    // Add metadata if present
+    if (Object.keys(meta).length > 0) {
+      logMessage += `\n${JSON.stringify(meta, null, 2)}`;
+    }
+    
+    return logMessage;
   })
 );
 
