@@ -32,8 +32,22 @@ export class Gateway extends EventEmitter {
   private handleConnection(ws: WebSocket, req: any): void {
     const connectionId = this.generateConnectionId();
     const remoteAddress = req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+    const origin = req.headers.origin || 'Unknown';
     
-    logger.info(`New connection ${connectionId} from ${remoteAddress}`);
+    logger.info(`🔗 NEW CONNECTION: ${connectionId}`, {
+      remoteAddress,
+      userAgent,
+      origin,
+      timestamp: new Date().toISOString(),
+      totalConnections: this.connections.size + 1,
+      headers: {
+        'user-agent': userAgent,
+        'origin': origin,
+        'sec-websocket-protocol': req.headers['sec-websocket-protocol'],
+        'sec-websocket-version': req.headers['sec-websocket-version']
+      }
+    });
     
     this.connections.set(connectionId, ws);
     this.connectionInfo.set(connectionId, {
@@ -56,7 +70,15 @@ export class Gateway extends EventEmitter {
     });
 
     ws.on('error', (error) => {
-      logger.error(`WebSocket error for connection ${connectionId}:`, error);
+      const connInfo = this.connectionInfo.get(connectionId);
+      logger.error(`❌ WEBSOCKET ERROR: ${connectionId}`, {
+        error: error.message,
+        mudName: connInfo?.mudName || 'Unknown',
+        authenticated: connInfo?.authenticated || false,
+        remoteAddress: connInfo?.host || 'Unknown',
+        messageCount: connInfo?.messageCount || 0,
+        connectionDuration: connInfo ? Date.now() - connInfo.connected.getTime() : 0
+      });
     });
 
     ws.on('pong', () => {
@@ -70,6 +92,7 @@ export class Gateway extends EventEmitter {
     try {
       const connection = this.connectionInfo.get(connectionId);
       if (!connection) {
+        logger.warn(`📦 MESSAGE IGNORED: Connection ${connectionId} not found`);
         return;
       }
 
@@ -77,25 +100,62 @@ export class Gateway extends EventEmitter {
       connection.messageCount++;
 
       const messageText = data.toString();
+      const messageSize = Buffer.byteLength(messageText, 'utf8');
+      
+      logger.debug(`📨 INCOMING MESSAGE: ${connectionId}`, {
+        mudName: connection.mudName || 'Unauthenticated',
+        authenticated: connection.authenticated,
+        messageSize,
+        messageCount: connection.messageCount,
+        rawLength: messageText.length,
+        preview: messageText.substring(0, 200) + (messageText.length > 200 ? '...' : '')
+      });
+
       let messageData: any;
       
       try {
         messageData = JSON.parse(messageText);
       } catch (error) {
+        logger.error(`❌ JSON PARSE ERROR: ${connectionId}`, {
+          mudName: connection.mudName || 'Unauthenticated',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          rawData: messageText.substring(0, 500)
+        });
         this.sendError(connectionId, ErrorCodes.INVALID_MESSAGE, 'Invalid JSON format');
         return;
       }
 
       const validation = validateMessage(messageData);
       if (validation.error) {
+        logger.error(`❌ VALIDATION ERROR: ${connectionId}`, {
+          mudName: connection.mudName || 'Unauthenticated',
+          error: validation.error,
+          messageType: messageData.type || 'Unknown',
+          messageId: messageData.id || 'No ID'
+        });
         this.sendError(connectionId, ErrorCodes.INVALID_MESSAGE, validation.error);
         return;
       }
 
       const message = validation.value!;
 
+      logger.info(`✅ VALID MESSAGE: ${connectionId}`, {
+        mudName: connection.mudName || 'Unauthenticated',
+        messageType: message.type,
+        messageId: message.id,
+        from: `${message.from.user || 'No user'}@${message.from.mud}`,
+        to: message.to.user ? `${message.to.user}@${message.to.mud}` : `channel:${message.to.channel}` || message.to.mud,
+        priority: message.metadata.priority,
+        ttl: message.metadata.ttl
+      });
+
       if (isExpired(message)) {
-        logger.warn(`Received expired message ${message.id} from ${connectionId}`);
+        logger.warn(`⏰ EXPIRED MESSAGE: ${connectionId}`, {
+          messageId: message.id,
+          mudName: connection.mudName || 'Unauthenticated',
+          timestamp: message.timestamp,
+          age: Date.now() - new Date(message.timestamp).getTime()
+        });
         return;
       }
 
@@ -125,19 +185,48 @@ export class Gateway extends EventEmitter {
   private async handleAuthentication(connectionId: string, message: MudVaultMessage): Promise<void> {
     const connection = this.connectionInfo.get(connectionId);
     if (!connection) {
+      logger.warn(`🔐 AUTH ATTEMPT: Connection ${connectionId} not found`);
       return;
     }
 
     const { mudName } = message.payload as any;
+    
+    logger.info(`🔐 AUTHENTICATION ATTEMPT: ${connectionId}`, {
+      attemptedMudName: mudName,
+      remoteAddress: connection.host,
+      messageId: message.id,
+      timestamp: message.timestamp,
+      connectionDuration: `${Math.round((Date.now() - connection.connected.getTime()) / 1000)}s`
+    });
+
     if (!mudName || typeof mudName !== 'string') {
+      logger.error(`❌ AUTH FAILED - Missing MUD name: ${connectionId}`, {
+        remoteAddress: connection.host,
+        providedMudName: mudName,
+        mudNameType: typeof mudName
+      });
       this.sendError(connectionId, ErrorCodes.AUTHENTICATION_FAILED, 'Missing mud name');
       return;
+    }
+
+    // Check if MUD name is already connected
+    const existingMud = Array.from(this.connectionInfo.values()).find(
+      conn => conn.authenticated && conn.mudName === mudName && conn.id !== connectionId
+    );
+
+    if (existingMud) {
+      logger.warn(`⚠️ MUD ALREADY CONNECTED: ${mudName}`, {
+        newConnectionId: connectionId,
+        existingConnectionId: existingMud.id,
+        newRemoteAddress: connection.host,
+        existingRemoteAddress: existingMud.host
+      });
     }
 
     connection.mudName = mudName;
     connection.authenticated = true;
 
-    this.mudInfo.set(mudName, {
+    const mudInfo = {
       name: mudName,
       host: connection.host,
       version: message.version,
@@ -146,12 +235,21 @@ export class Gateway extends EventEmitter {
       time: new Date().toISOString(),
       uptime: 0,
       users: 0
-    });
+    };
+
+    this.mudInfo.set(mudName, mudInfo);
 
     await redisService.sadd('connected_muds', mudName);
-    await redisService.set(`mud_info:${mudName}`, JSON.stringify(this.mudInfo.get(mudName)), 3600);
+    await redisService.set(`mud_info:${mudName}`, JSON.stringify(mudInfo), 3600);
 
-    logger.info(`MUD ${mudName} authenticated on connection ${connectionId}`);
+    logger.info(`✅ MUD AUTHENTICATED: ${mudName}`, {
+      connectionId,
+      remoteAddress: connection.host,
+      version: message.version,
+      messageId: message.id,
+      totalConnectedMuds: this.mudInfo.size,
+      authenticationTime: `${Math.round((Date.now() - connection.connected.getTime()) / 1000)}s`
+    });
     
     this.emit('mudConnected', { mudName, connectionId });
   }
@@ -174,34 +272,65 @@ export class Gateway extends EventEmitter {
   private async routeMessage(connectionId: string, message: MudVaultMessage): Promise<void> {
     const connection = this.connectionInfo.get(connectionId);
     if (!connection) {
+      logger.warn(`📤 ROUTING FAILED: Connection ${connectionId} not found`);
       return;
     }
 
     message.from.mud = connection.mudName;
 
-    if (message.to.mud === '*') {
-      await this.broadcastMessage(message, connectionId);
-    } else if (message.to.mud === 'Gateway') {
-      await this.handleGatewayMessage(connectionId, message);
-    } else {
-      await this.forwardMessage(message, connectionId);
-    }
+    logger.info(`📤 ROUTING MESSAGE: ${message.id}`, {
+      from: `${message.from.user || 'System'}@${message.from.mud}`,
+      to: message.to.user ? `${message.to.user}@${message.to.mud}` : `${message.to.channel ? `#${message.to.channel}` : message.to.mud}`,
+      type: message.type,
+      priority: message.metadata.priority,
+      routingMode: message.to.mud === '*' ? 'BROADCAST' : message.to.mud === 'Gateway' ? 'GATEWAY' : 'FORWARD',
+      messageSize: JSON.stringify(message).length
+    });
 
-    await this.storeMessage(message);
-    this.emit('messageRouted', { message, fromConnection: connectionId });
+    try {
+      if (message.to.mud === '*') {
+        await this.broadcastMessage(message, connectionId);
+      } else if (message.to.mud === 'Gateway') {
+        await this.handleGatewayMessage(connectionId, message);
+      } else {
+        await this.forwardMessage(message, connectionId);
+      }
+
+      await this.storeMessage(message);
+      this.emit('messageRouted', { message, fromConnection: connectionId });
+      
+      logger.debug(`✅ MESSAGE ROUTED SUCCESSFULLY: ${message.id}`);
+    } catch (error) {
+      logger.error(`❌ MESSAGE ROUTING FAILED: ${message.id}`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        messageType: message.type,
+        from: message.from.mud,
+        to: message.to.mud
+      });
+    }
   }
 
   private async broadcastMessage(message: MudVaultMessage, excludeConnection?: string): Promise<void> {
     const promises: Promise<void>[] = [];
+    const targetMuds: string[] = [];
     
     for (const [connId, ws] of this.connections) {
       if (connId !== excludeConnection && ws.readyState === WebSocket.OPEN) {
         const connection = this.connectionInfo.get(connId);
         if (connection?.authenticated) {
           promises.push(this.sendMessage(connId, message));
+          targetMuds.push(connection.mudName);
         }
       }
     }
+
+    logger.info(`📡 BROADCASTING MESSAGE: ${message.id}`, {
+      from: `${message.from.user || 'System'}@${message.from.mud}`,
+      type: message.type,
+      targetCount: targetMuds.length,
+      targetMuds: targetMuds.join(', '),
+      excludedConnection: excludeConnection || 'None'
+    });
 
     await Promise.all(promises);
   }
@@ -211,9 +340,24 @@ export class Gateway extends EventEmitter {
     const targetConnection = this.findConnectionByMud(targetMud);
 
     if (!targetConnection) {
+      logger.warn(`❌ FORWARD FAILED - Target MUD not found: ${message.id}`, {
+        from: `${message.from.user || 'System'}@${message.from.mud}`,
+        targetMud,
+        type: message.type,
+        availableMuds: Array.from(this.mudInfo.keys()).join(', ') || 'None'
+      });
       this.sendError(fromConnection, ErrorCodes.MUD_NOT_FOUND, `MUD ${targetMud} not found`);
       return;
     }
+
+    const targetInfo = this.connectionInfo.get(targetConnection);
+    logger.info(`➡️ FORWARDING MESSAGE: ${message.id}`, {
+      from: `${message.from.user || 'System'}@${message.from.mud}`,
+      to: message.to.user ? `${message.to.user}@${targetMud}` : targetMud,
+      type: message.type,
+      targetConnection,
+      targetRemoteAddress: targetInfo?.host || 'Unknown'
+    });
 
     await this.sendMessage(targetConnection, message);
   }
@@ -323,10 +467,30 @@ export class Gateway extends EventEmitter {
   }
 
   private handleDisconnection(connectionId: string, code: number, reason: Buffer): void {
-    logger.info(`Connection ${connectionId} disconnected: ${code} ${reason.toString()}`);
-    
     const connection = this.connectionInfo.get(connectionId);
-    if (connection?.authenticated) {
+    const connectionDuration = connection ? Date.now() - connection.connected.getTime() : 0;
+    const reasonText = reason.toString() || 'No reason provided';
+    
+    logger.info(`🔌 DISCONNECTION: ${connectionId}`, {
+      disconnectCode: code,
+      reason: reasonText,
+      mudName: connection?.mudName || 'Unauthenticated',
+      authenticated: connection?.authenticated || false,
+      remoteAddress: connection?.host || 'Unknown',
+      messageCount: connection?.messageCount || 0,
+      connectionDuration: `${Math.round(connectionDuration / 1000)}s`,
+      remainingConnections: this.connections.size - 1,
+      wasAuthenticatedMud: connection?.authenticated && connection?.mudName ? true : false
+    });
+    
+    if (connection?.authenticated && connection?.mudName) {
+      logger.info(`🏠 MUD DISCONNECTED: ${connection.mudName}`, {
+        connectionId,
+        totalMessagesProcessed: connection.messageCount,
+        sessionDuration: `${Math.round(connectionDuration / 1000)}s`,
+        lastSeen: connection.lastSeen.toISOString()
+      });
+      
       redisService.srem('connected_muds', connection.mudName);
       this.mudInfo.delete(connection.mudName);
       this.emit('mudDisconnected', { mudName: connection.mudName, connectionId });

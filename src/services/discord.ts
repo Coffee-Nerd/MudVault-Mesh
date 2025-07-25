@@ -37,6 +37,18 @@ export class DiscordService extends EventEmitter {
     super();
     this.config = config;
     this.logger = logger;
+    
+    this.logger.info('🤖 DISCORD SERVICE INITIALIZING', {
+      enabled: config.enabled,
+      guildId: config.guildId,
+      bridgeChannelId: config.bridgeChannelId,
+      mudName: config.mudName,
+      channelCount: config.channels.length,
+      channels: config.channels.join(', '),
+      channelMappings: config.channelMappings,
+      mudvaultUrl: mudvaultUrl,
+      requireVerification: config.requireVerification
+    });
 
     // Initialize Discord client
     this.discordClient = new Client({
@@ -57,6 +69,7 @@ export class DiscordService extends EventEmitter {
     this.setupDiscordEvents();
     this.setupIMCEvents();
     this.setupSlashCommands();
+    this.setupPeriodicLogging();
   }
 
   async start(): Promise<void> {
@@ -446,6 +459,17 @@ export class DiscordService extends EventEmitter {
     const mud = interaction.options.getString('mud');
     const character = interaction.options.getString('character');
     
+    this.logger.info('🔐 DISCORD VERIFICATION STARTED', {
+      discordUserId: interaction.user.id,
+      discordUsername: interaction.user.username,
+      discordDisplayName: interaction.user.displayName || interaction.user.username,
+      mudName: mud,
+      character: character,
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+      timestamp: new Date().toISOString()
+    });
+    
     // Generate verification code
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
     const expires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
@@ -455,6 +479,15 @@ export class DiscordService extends EventEmitter {
       mudName: mud,
       mudUsername: character,
       expires
+    });
+
+    this.logger.info('🎟️ VERIFICATION CODE GENERATED', {
+      code: code,
+      discordUserId: interaction.user.id,
+      mudName: mud,
+      character: character,
+      expires: expires.toISOString(),
+      totalPendingVerifications: this.verificationCodes.size
     });
 
     const embed = new EmbedBuilder()
@@ -681,5 +714,67 @@ export class DiscordService extends EventEmitter {
     // If no mapping found, return original and log it
     this.logger.debug(`DEBUG: No channel mapping for: ${channelName}, using as-is`);
     return channelName;
+  }
+
+  private setupPeriodicLogging(): void {
+    // Log Discord service status every 5 minutes
+    setInterval(() => {
+      this.logServiceStatus();
+    }, 5 * 60 * 1000);
+  }
+
+  private logServiceStatus(): void {
+    const verifiedUsers = Array.from(this.userMappings.values()).filter(u => u.verified);
+    const pendingVerifications = Array.from(this.verificationCodes.values());
+    
+    // Get Discord bot status
+    const discordStatus = {
+      connected: this.discordClient.isReady(),
+      ping: this.discordClient.ws.ping,
+      guilds: this.discordClient.guilds.cache.size,
+      users: this.discordClient.users.cache.size
+    };
+
+    // Get IMC client status  
+    const imcStatus = {
+      connected: this.imcClient.isConnected(),
+      mudName: this.config.mudName,
+      joinedChannels: this.config.channels
+    };
+
+    this.logger.info('📊 DISCORD SERVICE STATUS REPORT', {
+      timestamp: new Date().toISOString(),
+      discord: discordStatus,
+      imc: imcStatus,
+      userMappings: {
+        total: this.userMappings.size,
+        verified: verifiedUsers.length,
+        recentVerifications: verifiedUsers.filter(u => 
+          u.verifiedAt && (Date.now() - u.verifiedAt.getTime()) < 24 * 60 * 60 * 1000
+        ).length
+      },
+      verificationCodes: {
+        pending: this.verificationCodes.size,
+        expired: pendingVerifications.filter(v => v.expires < new Date()).length
+      },
+      channels: {
+        configured: this.config.channels.length,
+        mappings: Object.keys(this.config.channelMappings).length,
+        bridgeChannel: this.config.bridgeChannelId
+      }
+    });
+
+    // Clean up expired verification codes
+    for (const [code, verification] of this.verificationCodes.entries()) {
+      if (verification.expires < new Date()) {
+        this.verificationCodes.delete(code);
+        this.logger.debug('🧹 EXPIRED VERIFICATION CODE CLEANED', {
+          code,
+          discordId: verification.discordId,
+          mudName: verification.mudName,
+          username: verification.mudUsername
+        });
+      }
+    }
   }
 }
