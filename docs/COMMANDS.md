@@ -605,7 +605,7 @@ Before sending any commands, your MUD must authenticate with the gateway:
 
 **1. Connect to WebSocket**
 ```
-ws://your-hub.mudvault.org:8082
+ws://ws.mesh.mudvault.org:8082
 ```
 
 **2. Send Authentication**
@@ -667,5 +667,3 @@ After successful authentication, you can send any of the above commands.
 - **Low Priority (1-3)**: ping, presence updates, automated messages
 
 ---
-
-This completes the comprehensive command reference for MudVault Mesh protocol implementation.
