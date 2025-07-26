@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import { MudVaultMessage, ConnectionInfo, MudInfo, ErrorCodes } from '../types';
-import { validateMessage } from '../utils/validation';
+import { MudVaultMessage, ConnectionInfo, MudInfo, ErrorCodes, WhoUser } from '../types';
+import { validateMessage, validateMudName, normalizeMudName } from '../utils/validation';
 import { createErrorMessage, createPongMessage, createMessage, isExpired } from '../utils/message';
 import logger from '../utils/logger';
 import redisService from './redis';
@@ -212,13 +212,30 @@ export class Gateway extends EventEmitter {
       return;
     }
 
+    // Reject MUD names with spaces or invalid characters
+    if (!validateMudName(mudName)) {
+      const suggestedName = normalizeMudName(mudName);
+      logger.error(`❌ AUTH FAILED - Invalid MUD name: ${connectionId}`, {
+        providedName: mudName,
+        suggestedName: suggestedName,
+        remoteAddress: connection.host,
+        reason: 'MUD names cannot contain spaces or special characters'
+      });
+      
+      this.sendError(connectionId, ErrorCodes.AUTHENTICATION_FAILED, 
+        `Invalid MUD name "${mudName}". MUD names can only contain letters, numbers, dashes, and underscores (no spaces). Suggested name: "${suggestedName}". This ensures proper parsing of intermud commands like: tell user@${suggestedName} message`);
+      return;
+    }
+
+    const finalMudName = mudName;
+
     // Check if MUD name is already connected
     const existingMud = Array.from(this.connectionInfo.values()).find(
-      conn => conn.authenticated && conn.mudName === mudName && conn.id !== connectionId
+      conn => conn.authenticated && conn.mudName === finalMudName && conn.id !== connectionId
     );
 
     if (existingMud) {
-      logger.warn(`⚠️ MUD ALREADY CONNECTED: ${mudName}`, {
+      logger.warn(`⚠️ MUD ALREADY CONNECTED: ${finalMudName}`, {
         newConnectionId: connectionId,
         existingConnectionId: existingMud.id,
         newRemoteAddress: connection.host,
@@ -226,11 +243,11 @@ export class Gateway extends EventEmitter {
       });
     }
 
-    connection.mudName = mudName;
+    connection.mudName = finalMudName;
     connection.authenticated = true;
 
     const mudInfo = {
-      name: mudName,
+      name: finalMudName,
       host: connection.host,
       version: message.version,
       admin: '',
@@ -240,12 +257,12 @@ export class Gateway extends EventEmitter {
       users: 0
     };
 
-    this.mudInfo.set(mudName, mudInfo);
+    this.mudInfo.set(finalMudName, mudInfo);
 
-    await redisService.sadd('connected_muds', mudName);
-    await redisService.set(`mud_info:${mudName}`, JSON.stringify(mudInfo), 3600);
+    await redisService.sadd('connected_muds', finalMudName);
+    await redisService.set(`mud_info:${finalMudName}`, JSON.stringify(mudInfo), 3600);
 
-    logger.info(`✅ MUD AUTHENTICATED: ${mudName}`, {
+    logger.info(`✅ MUD AUTHENTICATED: ${finalMudName}`, {
       connectionId,
       remoteAddress: connection.host,
       version: message.version,
@@ -258,9 +275,9 @@ export class Gateway extends EventEmitter {
     const authSuccessMessage = createMessage(
       'auth',
       { mud: 'Gateway' },
-      { mud: mudName },
+      { mud: finalMudName },
       {
-        mudName: mudName,
+        mudName: finalMudName,
         response: 'Authentication successful'
       },
       { priority: 10 }
@@ -268,7 +285,7 @@ export class Gateway extends EventEmitter {
 
     await this.sendMessage(connectionId, authSuccessMessage);
     
-    this.emit('mudConnected', { mudName, connectionId });
+    this.emit('mudConnected', { mudName: finalMudName, connectionId });
   }
 
   private handlePing(connectionId: string, message: MudVaultMessage): void {
@@ -392,6 +409,18 @@ export class Gateway extends EventEmitter {
           await this.handleLocateRequest(connectionId, message);
         }
         break;
+
+      case 'mudlist':
+        if ((message.payload as any).request) {
+          await this.handleMudListRequest(connectionId, message);
+        }
+        break;
+
+      case 'channels':
+        if ((message.payload as any).request) {
+          await this.handleChannelsRequest(connectionId, message);
+        }
+        break;
         
       default:
         this.sendError(connectionId, ErrorCodes.UNSUPPORTED_VERSION, `Unsupported gateway message type: ${message.type}`);
@@ -399,16 +428,78 @@ export class Gateway extends EventEmitter {
   }
 
   private async handleWhoRequest(connectionId: string, message: MudVaultMessage): Promise<void> {
-    const connectedMuds = await redisService.smembers('connected_muds');
+    const payload = message.payload as any;
     
-    await this.sendMessage(connectionId, {
-      ...message,
-      from: { mud: 'Gateway' },
-      to: { mud: message.from.mud },
-      payload: {
-        users: connectedMuds.map(mud => ({ username: mud, displayName: mud }))
+    logger.info(`🔍 WHO REQUEST: ${connectionId}`, {
+      mudName: message.from.mud,
+      requestParameters: {
+        sort: payload.sort || 'none',
+        format: payload.format || 'long',
+        filter: payload.filter || 'none'
       }
     });
+
+    // For gateway who requests, we show connected MUDs as "users"
+    const connectedMuds = await redisService.smembers('connected_muds');
+    const mudUsers: WhoUser[] = [];
+
+    for (const mudName of connectedMuds) {
+      const connection = Array.from(this.connectionInfo.values())
+        .find(conn => conn.authenticated && conn.mudName === mudName);
+      
+      if (connection) {
+        const idleSeconds = Math.floor((Date.now() - connection.lastSeen.getTime()) / 1000);
+        const uptimeSeconds = Math.floor((Date.now() - connection.connected.getTime()) / 1000);
+        
+        mudUsers.push({
+          username: mudName,
+          displayName: mudName,
+          title: 'MUD Server',
+          level: 'System',
+          idle: idleSeconds,
+          location: connection.host,
+          flags: ['mud', 'system'],
+          realName: `${mudName} (Connected ${uptimeSeconds}s ago)`
+        });
+      }
+    }
+
+    // Apply sorting if requested
+    if (payload.sort) {
+      mudUsers.sort((a, b) => {
+        switch (payload.sort) {
+          case 'alpha':
+            return a.username.localeCompare(b.username);
+          case 'idle':
+            return a.idle - b.idle;
+          case 'level':
+            return (a.level || '').localeCompare(b.level || '');
+          case 'random':
+            return Math.random() - 0.5;
+          default:
+            return 0;
+        }
+      });
+    }
+
+    const whoResponse = createMessage(
+      'who',
+      { mud: 'Gateway' },
+      { mud: message.from.mud },
+      { 
+        users: mudUsers,
+        request: false // This is a response, not a request
+      },
+      { priority: message.metadata.priority }
+    );
+
+    logger.info(`📊 WHO RESPONSE: ${connectionId}`, {
+      mudName: message.from.mud,
+      userCount: mudUsers.length,
+      responseSize: JSON.stringify(whoResponse).length
+    });
+
+    await this.sendMessage(connectionId, whoResponse);
   }
 
   private async handleLocateRequest(connectionId: string, message: MudVaultMessage): Promise<void> {
@@ -433,6 +524,90 @@ export class Gateway extends EventEmitter {
         locations
       }
     });
+  }
+
+  private async handleMudListRequest(connectionId: string, message: MudVaultMessage): Promise<void> {
+    logger.info(`📋 MUDLIST REQUEST: ${connectionId}`, {
+      mudName: message.from.mud,
+      messageId: message.id
+    });
+
+    const connectedMuds = await redisService.smembers('connected_muds');
+    const mudList = [];
+
+    for (const mudName of connectedMuds) {
+      const connection = Array.from(this.connectionInfo.values())
+        .find(conn => conn.authenticated && conn.mudName === mudName);
+      
+      if (connection) {
+        const uptimeSeconds = Math.floor((Date.now() - connection.connected.getTime()) / 1000);
+        
+        mudList.push({
+          name: mudName,
+          host: connection.host,
+          version: connection.version,
+          admin: '', // Could be populated from MUD info
+          email: '', // Could be populated from MUD info
+          uptime: uptimeSeconds,
+          users: 0, // Could be populated from who queries
+          description: `${mudName} MUD Server`
+        });
+      }
+    }
+
+    const response = createMessage(
+      'mudlist',
+      { mud: 'Gateway' },
+      { mud: message.from.mud },
+      { 
+        muds: mudList,
+        request: false
+      },
+      { priority: message.metadata.priority }
+    );
+
+    logger.info(`📋 MUDLIST RESPONSE: ${connectionId}`, {
+      mudName: message.from.mud,
+      mudCount: mudList.length,
+      muds: mudList.map(m => m.name).join(', ')
+    });
+
+    await this.sendMessage(connectionId, response);
+  }
+
+  private async handleChannelsRequest(connectionId: string, message: MudVaultMessage): Promise<void> {
+    logger.info(`📺 CHANNELS REQUEST: ${connectionId}`, {
+      mudName: message.from.mud,
+      messageId: message.id
+    });
+
+    // For now, return hardcoded channels - could be made dynamic later
+    const channels = [
+      { name: 'ooc', description: 'Out of Character chat', memberCount: 0, flags: ['public'] },
+      { name: 'chat', description: 'General chat channel', memberCount: 0, flags: ['public'] },
+      { name: 'gossip', description: 'Gossip and rumors', memberCount: 0, flags: ['public'] },
+      { name: 'newbie', description: 'Help for new players', memberCount: 0, flags: ['public'] },
+      { name: 'admin', description: 'Administrative channel', memberCount: 0, flags: ['private', 'admin'] }
+    ];
+
+    const response = createMessage(
+      'channels',
+      { mud: 'Gateway' },
+      { mud: message.from.mud },
+      { 
+        channels: channels,
+        request: false
+      },
+      { priority: message.metadata.priority }
+    );
+
+    logger.info(`📺 CHANNELS RESPONSE: ${connectionId}`, {
+      mudName: message.from.mud,
+      channelCount: channels.length,
+      channels: channels.map(c => c.name).join(', ')
+    });
+
+    await this.sendMessage(connectionId, response);
   }
 
   private findConnectionByMud(mudName: string): string | null {

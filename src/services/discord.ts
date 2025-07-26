@@ -633,33 +633,98 @@ export class DiscordService extends EventEmitter {
   private formatWhoList(whoData: any): EmbedBuilder[] {
     const embeds: EmbedBuilder[] = [];
     
-    for (const mudName in whoData) {
-      const players = whoData[mudName];
+    // whoData should be { users: WhoUser[] } format now
+    const users = whoData.users || [];
+    
+    if (users.length === 0) {
+      const embed = new EmbedBuilder()
+        .setTitle('🌍 Who List')
+        .setDescription('```ansi\n\u001b[0;31mNo users online\u001b[0m\n```')
+        .setColor(0xff0000)
+        .setTimestamp();
+      embeds.push(embed);
+      return embeds;
+    }
+
+    // Group users by MUD if they have location info, otherwise treat as single list
+    const mudGroups: { [key: string]: any[] } = {};
+    
+    users.forEach((user: any) => {
+      const mudName = user.location || 'Unknown';
+      if (!mudGroups[mudName]) {
+        mudGroups[mudName] = [];
+      }
+      mudGroups[mudName].push(user);
+    });
+
+    for (const mudName in mudGroups) {
+      const mudUsers = mudGroups[mudName];
       
       const embed = new EmbedBuilder()
         .setTitle(`🌍 ${mudName}`)
         .setColor(0x00ff00)
         .setTimestamp();
 
-      if (players.length === 0) {
-        embed.setDescription('```ansi\n\u001b[0;31mNo players online\u001b[0m\n```');
-      } else {
-        let playerList = '';
-        players.forEach((player: any, index: number) => {
-          playerList += `\u001b[1;36m${player.name}\u001b[0m`;
-          if (player.title) playerList += ` \u001b[0;37m${player.title}\u001b[0m`;
-          if (player.level) playerList += ` \u001b[0;33m[${player.level}]\u001b[0m`;
-          playerList += '\n';
-        });
+      let userList = '';
+      mudUsers.forEach((user: any) => {
+        // Format: Username [Level] Title (idle: 5m)
+        let line = `\u001b[1;36m${user.username}\u001b[0m`;
+        
+        if (user.level) {
+          line += ` \u001b[0;33m[${user.level}]\u001b[0m`;
+        }
+        
+        if (user.title) {
+          line += ` \u001b[0;37m${user.title}\u001b[0m`;
+        }
 
-        embed.setDescription(`\`\`\`ansi\n${playerList}\`\`\``);
-        embed.setFooter({ text: `${players.length} players online` });
-      }
+        // Format idle time
+        const idleSeconds = user.idle || 0;
+        if (idleSeconds > 0) {
+          const idleFormatted = this.formatIdleTime(idleSeconds);
+          line += ` \u001b[0;90m(idle: ${idleFormatted})\u001b[0m`;
+        }
+
+        // Add flags (admin, coder, etc.)
+        if (user.flags && user.flags.length > 0) {
+          const flagStr = user.flags.map((flag: string) => {
+            switch (flag) {
+              case 'admin': return '\u001b[1;31m[ADMIN]\u001b[0m';
+              case 'coder': return '\u001b[1;35m[CODER]\u001b[0m';
+              case 'newbie': return '\u001b[1;32m[NEWBIE]\u001b[0m';
+              default: return `\u001b[0;37m[${flag.toUpperCase()}]\u001b[0m`;
+            }
+          }).join(' ');
+          line += ` ${flagStr}`;
+        }
+
+        userList += line + '\n';
+      });
+
+      embed.setDescription(`\`\`\`ansi\n${userList}\`\`\``);
+      embed.setFooter({ text: `${mudUsers.length} users online` });
 
       embeds.push(embed);
     }
 
     return embeds;
+  }
+
+  private formatIdleTime(seconds: number): string {
+    if (seconds < 60) {
+      return `${seconds}s`;
+    } else if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      return `${minutes}m`;
+    } else if (seconds < 86400) {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      return minutes > 0 ? `${hours}h${minutes}m` : `${hours}h`;
+    } else {
+      const days = Math.floor(seconds / 86400);
+      const hours = Math.floor((seconds % 86400) / 3600);
+      return hours > 0 ? `${days}d${hours}h` : `${days}d`;
+    }
   }
 
   private formatChannelList(channels: string[]): EmbedBuilder {

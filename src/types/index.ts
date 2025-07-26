@@ -37,7 +37,9 @@ export type MessageType =
   | 'auth'
   | 'ping'
   | 'pong'
-  | 'error';
+  | 'error'
+  | 'mudlist' // Query for connected MUDs
+  | 'channels'; // Query for available channels
 
 export type MessagePayload = 
   | TellPayload 
@@ -49,7 +51,9 @@ export type MessagePayload =
   | PresencePayload
   | AuthPayload
   | PingPayload
-  | ErrorPayload;
+  | ErrorPayload
+  | MudListPayload
+  | ChannelsPayload;
 
 export interface TellPayload {
   message: string;
@@ -109,18 +113,38 @@ export interface ErrorPayload {
   details?: any;
 }
 
+export interface MudListPayload {
+  muds?: MudInfo[];
+  request?: boolean;
+}
+
+export interface ChannelInfo {
+  name: string;
+  description?: string;
+  memberCount?: number;
+  flags?: string[];
+}
+
+export interface ChannelsPayload {
+  channels?: ChannelInfo[];
+  request?: boolean;
+}
+
 export interface UserInfo {
   username: string;
   displayName?: string;
-  idleTime?: number;
+  title?: string;
+  level?: string; // Changed to string to support non-numeric levels
+  idle: number; // Renamed from idleTime and made required - idle time in seconds
   location?: string;
-  level?: number;
+  flags?: string[]; // For admin, coder, newbie, etc.
+  realName?: string;
+  // Legacy fields for backward compatibility
   race?: string;
   class?: string;
   guild?: string;
   lastLogin?: string;
   email?: string;
-  realName?: string;
   plan?: string;
 }
 
@@ -175,6 +199,17 @@ export interface ConnectionInfo {
   lastSeen: Date;
   messageCount: number;
   version: string;
+}
+
+export interface WhoUser {
+  username: string;
+  displayName?: string;
+  title?: string;
+  level?: string; // Changed from number to optional string
+  idle: number; // Idle time in seconds since last activity
+  location?: string;
+  flags?: string[]; // For admin, coder, newbie, etc.
+  realName?: string;
 }
 
 export interface RateLimitConfig {

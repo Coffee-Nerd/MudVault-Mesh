@@ -38,9 +38,28 @@ const channelPayloadSchema = Joi.object({
   formatted: Joi.string().max(8192).optional()
 });
 
+const whoUserSchema = Joi.object({
+  username: Joi.string().required(),
+  displayName: Joi.string().optional(),
+  title: Joi.string().optional(),
+  level: Joi.string().optional(), // String to support non-numeric levels
+  idle: Joi.number().integer().min(0).required(), // Idle time in seconds
+  location: Joi.string().optional(),
+  flags: Joi.array().items(Joi.string()).optional(), // admin, coder, newbie, etc.
+  realName: Joi.string().optional()
+});
+
 const whoPayloadSchema = Joi.object({
-  users: Joi.array().items(Joi.object()).optional(),
-  request: Joi.boolean().optional()
+  users: Joi.array().items(whoUserSchema).optional(),
+  request: Joi.boolean().optional(),
+  // Optional parameters for who requests
+  sort: Joi.string().valid('alpha', 'level', 'idle', 'random').optional(),
+  format: Joi.string().valid('short', 'long', 'custom').optional(),
+  filter: Joi.object({
+    minLevel: Joi.string().optional(),
+    maxLevel: Joi.string().optional(),
+    flags: Joi.array().items(Joi.string()).optional()
+  }).optional()
 });
 
 const fingerPayloadSchema = Joi.object({
@@ -78,6 +97,30 @@ const errorPayloadSchema = Joi.object({
   details: Joi.any().optional()
 });
 
+const mudListPayloadSchema = Joi.object({
+  muds: Joi.array().items(Joi.object({
+    name: Joi.string().required(),
+    host: Joi.string().optional(),
+    version: Joi.string().optional(),
+    admin: Joi.string().optional(),
+    email: Joi.string().optional(),
+    uptime: Joi.number().optional(),
+    users: Joi.number().optional(),
+    description: Joi.string().optional()
+  })).optional(),
+  request: Joi.boolean().optional()
+});
+
+const channelsPayloadSchema = Joi.object({
+  channels: Joi.array().items(Joi.object({
+    name: Joi.string().required(),
+    description: Joi.string().optional(),
+    memberCount: Joi.number().optional(),
+    flags: Joi.array().items(Joi.string()).optional() // public, private, admin, etc.
+  })).optional(),
+  request: Joi.boolean().optional()
+});
+
 const payloadSchemas: Record<MessageType, Joi.ObjectSchema> = {
   tell: tellPayloadSchema,
   emote: emotePayloadSchema,
@@ -90,7 +133,9 @@ const payloadSchemas: Record<MessageType, Joi.ObjectSchema> = {
   auth: authPayloadSchema,
   ping: pingPayloadSchema,
   pong: pingPayloadSchema,
-  error: errorPayloadSchema
+  error: errorPayloadSchema,
+  mudlist: mudListPayloadSchema,
+  channels: channelsPayloadSchema
 };
 
 const messageSchema = Joi.object({
@@ -128,6 +173,24 @@ export function validateMessage(message: any): { error?: string; value?: MudVaul
 
 export function validateMudName(mudName: string): boolean {
   return /^[a-zA-Z0-9\-_]{3,32}$/.test(mudName);
+}
+
+export function normalizeMudName(mudName: string): string {
+  // Convert spaces to dashes and remove invalid characters
+  return mudName
+    .replace(/\s+/g, '-')           // Replace spaces with dashes
+    .replace(/[^a-zA-Z0-9\-_]/g, '') // Remove invalid characters
+    .replace(/--+/g, '-')           // Replace multiple dashes with single dash
+    .replace(/^-|-$/g, '')          // Remove leading/trailing dashes
+    .substring(0, 32);              // Limit to 32 characters
+}
+
+export function validateAndNormalizeMudName(mudName: string): { valid: boolean; normalized: string; changed: boolean } {
+  const normalized = normalizeMudName(mudName);
+  const valid = validateMudName(normalized);
+  const changed = mudName !== normalized;
+  
+  return { valid, normalized, changed };
 }
 
 export function validateUserName(userName: string): boolean {
