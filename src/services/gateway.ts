@@ -173,7 +173,7 @@ export class Gateway extends EventEmitter {
       }
 
       if (message.type === 'ping') {
-        this.handlePing(connectionId, message);
+        await this.handlePing(connectionId, message);
         return;
       }
 
@@ -288,11 +288,17 @@ export class Gateway extends EventEmitter {
     this.emit('mudConnected', { mudName: finalMudName, connectionId });
   }
 
-  private handlePing(connectionId: string, message: MudVaultMessage): void {
+  private async handlePing(connectionId: string, message: MudVaultMessage): Promise<void> {
     const connection = this.connectionInfo.get(connectionId);
     if (!connection) {
       return;
     }
+
+    logger.info(`🏓 PING REQUEST: ${connectionId}`, {
+      mudName: connection.mudName,
+      timestamp: (message.payload as any).timestamp,
+      messageId: message.id
+    });
 
     const pongMessage = createPongMessage(
       { mud: 'Gateway' },
@@ -300,7 +306,7 @@ export class Gateway extends EventEmitter {
       (message.payload as any).timestamp
     );
 
-    this.sendMessage(connectionId, pongMessage);
+    await this.sendMessage(connectionId, pongMessage);
   }
 
   private async routeMessage(connectionId: string, message: MudVaultMessage): Promise<void> {
@@ -421,9 +427,15 @@ export class Gateway extends EventEmitter {
           await this.handleChannelsRequest(connectionId, message);
         }
         break;
+
+      case 'finger':
+        if ((message.payload as any).request) {
+          await this.handleFingerRequest(connectionId, message);
+        }
+        break;
         
       default:
-        this.sendError(connectionId, ErrorCodes.UNSUPPORTED_VERSION, `Unsupported gateway message type: ${message.type}`);
+        this.sendError(connectionId, ErrorCodes.PROTOCOL_ERROR, `Unsupported gateway message type: ${message.type}`);
     }
   }
 
@@ -502,28 +514,74 @@ export class Gateway extends EventEmitter {
     await this.sendMessage(connectionId, whoResponse);
   }
 
+  private async handleFingerRequest(connectionId: string, message: MudVaultMessage): Promise<void> {
+    const { user } = message.payload as any;
+    
+    logger.info(`👤 FINGER REQUEST: ${connectionId}`, {
+      mudName: message.from.mud,
+      targetUser: user,
+      messageId: message.id
+    });
+    
+    // For gateway finger requests, provide basic system info
+    const fingerResponse = createMessage(
+      'finger',
+      { mud: 'Gateway' },
+      { mud: message.from.mud },
+      {
+        user,
+        request: false,
+        info: {
+          username: user,
+          realName: 'MudVault Mesh Gateway User',
+          email: 'noreply@mudvault.org',
+          lastLogin: new Date().toISOString(),
+          plan: 'Connected to MudVault Mesh inter-MUD communication network',
+          level: 'System',
+          location: 'Gateway Server'
+        }
+      },
+      { priority: message.metadata.priority }
+    );
+
+    await this.sendMessage(connectionId, fingerResponse);
+  }
+
   private async handleLocateRequest(connectionId: string, message: MudVaultMessage): Promise<void> {
     const { user } = message.payload as any;
     const locations: any[] = [];
     
+    logger.info(`🔍 LOCATE REQUEST: ${connectionId}`, {
+      mudName: message.from.mud,
+      targetUser: user,
+      messageId: message.id
+    });
+    
+    // Search through all connected MUDs for the user
     for (const [_connId, connection] of this.connectionInfo) {
       if (connection.authenticated) {
         locations.push({
           mud: connection.mudName,
-          online: true
+          online: true,
+          room: 'Connected to Gateway',
+          area: 'MudVault Mesh'
         });
       }
     }
 
-    await this.sendMessage(connectionId, {
-      ...message,
-      from: { mud: 'Gateway' },
-      to: { mud: message.from.mud },
-      payload: {
+    const locateResponse = createMessage(
+      'locate',
+      { mud: 'Gateway' },
+      { mud: message.from.mud },
+      {
         user,
+        request: false,
         locations
-      }
-    });
+      },
+      { priority: message.metadata.priority }
+    );
+
+    await this.sendMessage(connectionId, locateResponse);
   }
 
   private async handleMudListRequest(connectionId: string, message: MudVaultMessage): Promise<void> {
