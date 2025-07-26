@@ -538,7 +538,8 @@ export class Gateway extends EventEmitter {
           lastLogin: new Date().toISOString(),
           plan: 'Connected to MudVault Mesh inter-MUD communication network',
           level: 'System',
-          location: 'Gateway Server'
+          location: 'Gateway Server',
+          idle: 0
         }
       },
       { priority: message.metadata.priority }
