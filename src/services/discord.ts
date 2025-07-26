@@ -594,7 +594,7 @@ export class DiscordService extends EventEmitter {
 
   private async handleIMCWhoResponse(message: MudVaultMessage): Promise<void> {
     // Format who list for Discord
-    const embeds = this.formatWhoList(message.payload);
+    // const embeds = this.formatWhoList(message.payload);
     
     // This would need to be linked to the original interaction
     // For now, just log it

@@ -30,7 +30,7 @@ const logger = winston.createLogger({
 });
 
 if (process.env.LOG_FILE) {
-  const _logDir = path.dirname(process.env.LOG_FILE);
+  // const _logDir = path.dirname(process.env.LOG_FILE);
   logger.add(new winston.transports.File({
     filename: process.env.LOG_FILE,
     maxsize: 10 * 1024 * 1024, // 10MB

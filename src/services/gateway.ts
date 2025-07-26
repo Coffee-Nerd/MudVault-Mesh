@@ -559,7 +559,7 @@ export class Gateway extends EventEmitter {
     });
     
     // Search through all connected MUDs for the user
-    for (const [_connId, connection] of this.connectionInfo) {
+    for (const [, connection] of this.connectionInfo) {
       if (connection.authenticated) {
         locations.push({
           mud: connection.mudName,
