@@ -176,13 +176,14 @@ export function validateMudName(mudName: string): boolean {
 }
 
 export function normalizeMudName(mudName: string): string {
-  // Convert spaces to dashes and remove invalid characters
+  // Convert spaces to dashes, remove invalid characters, and lowercase
   return mudName
     .replace(/\s+/g, '-')           // Replace spaces with dashes
     .replace(/[^a-zA-Z0-9\-_]/g, '') // Remove invalid characters
     .replace(/--+/g, '-')           // Replace multiple dashes with single dash
     .replace(/^-|-$/g, '')          // Remove leading/trailing dashes
-    .substring(0, 32);              // Limit to 32 characters
+    .substring(0, 32)               // Limit to 32 characters
+    .toLowerCase();                 // Lowercase for case-insensitive matching
 }
 
 export function validateAndNormalizeMudName(mudName: string): { valid: boolean; normalized: string; changed: boolean } {

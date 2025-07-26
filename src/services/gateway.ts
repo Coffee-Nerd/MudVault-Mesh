@@ -227,11 +227,12 @@ export class Gateway extends EventEmitter {
       return;
     }
 
-    const finalMudName = mudName;
+    // Normalize mudName for case-insensitive matching
+    const finalMudName = normalizeMudName(mudName).toLowerCase();
 
     // Check if MUD name is already connected
     const existingMud = Array.from(this.connectionInfo.values()).find(
-      conn => conn.authenticated && conn.mudName === finalMudName && conn.id !== connectionId
+      conn => conn.authenticated && normalizeMudName(conn.mudName).toLowerCase() === finalMudName && conn.id !== connectionId
     );
 
     if (existingMud) {
@@ -456,8 +457,10 @@ export class Gateway extends EventEmitter {
     const mudUsers: WhoUser[] = [];
 
     for (const mudName of connectedMuds) {
+      // Normalize for lookup
+      const normalizedMudName = normalizeMudName(mudName).toLowerCase();
       const connection = Array.from(this.connectionInfo.values())
-        .find(conn => conn.authenticated && conn.mudName === mudName);
+        .find(conn => conn.authenticated && normalizeMudName(conn.mudName).toLowerCase() === normalizedMudName);
       
       if (connection) {
         const idleSeconds = Math.floor((Date.now() - connection.lastSeen.getTime()) / 1000);
@@ -596,7 +599,7 @@ export class Gateway extends EventEmitter {
 
     for (const mudName of connectedMuds) {
       const connection = Array.from(this.connectionInfo.values())
-        .find(conn => conn.authenticated && conn.mudName === mudName);
+        .find(conn => conn.authenticated && normalizeMudName(conn.mudName).toLowerCase() === normalizeMudName(mudName).toLowerCase());
       
       if (connection) {
         const uptimeSeconds = Math.floor((Date.now() - connection.connected.getTime()) / 1000);
@@ -670,8 +673,9 @@ export class Gateway extends EventEmitter {
   }
 
   private findConnectionByMud(mudName: string): string | null {
+    const normalizedTarget = normalizeMudName(mudName).toLowerCase();
     for (const [connId, info] of this.connectionInfo) {
-      if (info.mudName === mudName && info.authenticated) {
+      if (normalizeMudName(info.mudName).toLowerCase() === normalizedTarget && info.authenticated) {
         return connId;
       }
     }
