@@ -26,6 +26,9 @@ All MudVault Mesh messages follow this structure:
 
 **Important Notes:**
 - MUD names **cannot contain spaces** (use dashes: `Dark-Wizardry` not `Dark Wizardry`)
+- MUD names are case-insensitive for lookups (but preserve original case when storing)
+- Commands to query network info (`who`, `mudlist`, `channels`, `locate`) go to `"Gateway"`
+- Commands to specific MUDs (`tell`, `finger`) go to the target MUD
 - All UUIDs must be valid v4 format
 - Timestamps must be ISO 8601 format
 - TTL is in seconds (default: 300 = 5 minutes)
@@ -192,7 +195,13 @@ All MudVault Mesh messages follow this structure:
 
 ### `mudvault who [mud]`
 
-**Send (network-wide who):**
+**Important Note:** When requesting a network-wide "who", the Gateway returns **connected MUDs** as "users", not actual players. This shows which MUDs are online in the network.
+
+**Security & Privacy:** The Gateway NEVER reveals player locations or sensitive game data. The `location` field shows network information (IP addresses) where MUD servers are hosted, NOT in-game room locations. This protects players from PK tracking, stalking, and meta-gaming across MUDs.
+
+To see actual players, request "who" from a specific MUD (each MUD controls its own privacy policy).
+
+**Send (network-wide who - shows connected MUDs):**
 ```json
 {
   "version": "1.0",
@@ -210,7 +219,7 @@ All MudVault Mesh messages follow this structure:
 }
 ```
 
-**Send (specific MUD who):**
+**Send (specific MUD who - shows actual players on that MUD):**
 ```json
 {
   "version": "1.0",
@@ -228,7 +237,37 @@ All MudVault Mesh messages follow this structure:
 }
 ```
 
-**Response:**
+**Response (from specific MUD - shows real players with in-game info):**
+```json
+{
+  "version": "1.0",
+  "id": "87654321-4321-7654-1098-987654321cba",
+  "timestamp": "2025-01-26T12:34:57.123Z",
+  "type": "who",
+  "from": {"mud": "Avalon"},
+  "to": {"mud": "Dark-Wizardry"},
+  "payload": {
+    "request": false,
+    "users": [
+      {
+        "username": "Asmodeus",
+        "displayName": "Asmodeus the Demon Lord",
+        "title": "Lord of the Abyss",
+        "level": "100",
+        "idle": 45,
+        "location": "The Throne Room",  // In-game location (MUD's choice to share)
+        "flags": ["admin", "coder"],
+        "realName": "The Dark Lord"
+      }
+    ]
+  },
+  "metadata": {"priority": 5, "ttl": 300, "encoding": "utf-8", "language": "en"}
+}
+```
+
+**Note:** Individual MUDs control their own privacy policy and may choose to show or hide player locations.
+
+**Response (from Gateway - shows connected MUDs as "users"):**
 ```json
 {
   "version": "1.0",
@@ -241,23 +280,23 @@ All MudVault Mesh messages follow this structure:
     "request": false,
     "users": [
       {
-        "username": "Asmodeus",
-        "displayName": "Asmodeus the Demon Lord",
-        "title": "Lord of the Abyss",
-        "level": "100",
-        "idle": 45,
-        "location": "mesh.mudvault.org",
-        "flags": ["admin", "coder"],
+        "username": "Dark-Wizardry",
+        "displayName": "Dark-Wizardry",
+        "title": "",
+        "level": "",
+        "idle": 0,
+        "location": "86.38.203.37",  // Network location (server IP) - NOT game location for security
+        "flags": ["mud", "system"],
         "realName": "Dark-Wizardry (Connected 3600s ago)"
       },
       {
-        "username": "TestPlayer",
-        "displayName": "TestPlayer",
-        "title": "Newbie",
-        "level": "1",
+        "username": "TestMUD",
+        "displayName": "TestMUD",
+        "title": "",
+        "level": "",
         "idle": 0,
-        "location": "192.168.1.100",
-        "flags": ["newbie"],
+        "location": "192.168.1.100",  // Network location (server IP)
+        "flags": ["mud", "system"],
         "realName": "TestMUD (Connected 120s ago)"
       }
     ]
@@ -298,14 +337,14 @@ All MudVault Mesh messages follow this structure:
     "user": "Asmodeus",
     "request": false,
     "info": {
+      "username": "Asmodeus",
       "realName": "The Dark Lord",
       "email": "asmodeus@avalon.mud",
       "lastLogin": "2025-01-26T12:30:00.000Z",
       "plan": "Working on inter-MUD domination",
       "level": "100",
-      "class": "Demon Lord",
-      "guild": "Lords of Darkness",
-      "location": "The Throne Room"
+      "location": "The Throne Room",
+      "idle": 45
     }
   },
   "metadata": {"priority": 5, "ttl": 300, "encoding": "utf-8", "language": "en"}
@@ -457,23 +496,23 @@ All MudVault Mesh messages follow this structure:
     "muds": [
       {
         "name": "Dark-Wizardry",
-        "host": "mesh.mudvault.org",
+        "host": "86.38.203.37",
         "version": "1.0",
-        "admin": "Asmodeus",
-        "email": "admin@darkwiz.org",
+        "admin": "",
+        "email": "",
         "uptime": 3600,
-        "users": 15,
+        "users": 0,
         "description": "Dark-Wizardry MUD Server"
       },
       {
-        "name": "Avalon",
+        "name": "TestMUD",
         "host": "192.168.1.100",
         "version": "1.0",
-        "admin": "Arthur",
-        "email": "admin@avalon.mud",
+        "admin": "",
+        "email": "",
         "uptime": 7200,
-        "users": 8,
-        "description": "Avalon MUD Server"
+        "users": 0,
+        "description": "TestMUD MUD Server"
       }
     ]
   },
@@ -521,7 +560,7 @@ All MudVault Mesh messages follow this structure:
 
 ---
 
-## 7. Presence/Status Commands
+## 7. Presence/Status Commands  
 
 ### Presence Updates (Automatic)
 
@@ -605,7 +644,7 @@ Before sending any commands, your MUD must authenticate with the gateway:
 
 **1. Connect to WebSocket**
 ```
-ws://your-hub.mudvault.org:8082
+ws://ws.mesh.mudvault.org
 ```
 
 **2. Send Authentication**
@@ -618,7 +657,8 @@ ws://your-hub.mudvault.org:8082
   "from": {"mud": "Dark-Wizardry"},
   "to": {"mud": "Gateway"},
   "payload": {
-    "mudName": "Dark-Wizardry"
+    "mudName": "Dark-Wizardry",
+    "apiKey": "your-api-key-here"
   },
   "metadata": {"priority": 10, "ttl": 300, "encoding": "utf-8", "language": "en"}
 }
