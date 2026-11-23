@@ -5,9 +5,14 @@ This module provides the main MeshClient class for connecting to the MudVault Me
 """
 
 import asyncio
+import dataclasses
+import enum
 import json
 import logging
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Callable, Optional, Dict, Any, Union
 import websockets
 from websockets.exceptions import ConnectionClosed, InvalidHandshake
@@ -36,6 +41,26 @@ from .utils import (
 
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_GATEWAY = "wss://mesh.mudvault.org/ws"
+
+
+def _to_wire(value: Any) -> Any:
+    """Convert a value to the gateway's JSON shape: camelCase keys and no nulls."""
+    if dataclasses.is_dataclass(value):
+        value = {f.name: getattr(value, f.name) for f in dataclasses.fields(value)}
+    if isinstance(value, dict):
+        wire = {}
+        for key, item in value.items():
+            if item is not None:
+                head, *rest = key.split("_")
+                wire[head + "".join(part.title() for part in rest)] = _to_wire(item)
+        return wire
+    if isinstance(value, (list, tuple)):
+        return [_to_wire(item) for item in value]
+    if isinstance(value, enum.Enum):
+        return value.value
+    return value
 
 
 class MeshClient:
@@ -116,7 +141,7 @@ class MeshClient:
     
     async def connect(
         self,
-        gateway_url: str = "wss://mesh.mudvault.org",
+        gateway_url: str = DEFAULT_GATEWAY,
         api_key: Optional[str] = None
     ) -> None:
         """
@@ -124,34 +149,35 @@ class MeshClient:
         
         Args:
             gateway_url: WebSocket URL of the gateway
-            api_key: Optional API key for authentication
+            api_key: The API key issued for this MUD
         """
         if self.state.connected:
             raise RuntimeError("Already connected")
         
         self._gateway_url = gateway_url
-        self._api_key = api_key
-        
+        self._api_key = api_key if api_key is not None else self._api_key
+        if not self._api_key:
+            raise ValueError("An API key is required")
+
         try:
+            token = await asyncio.get_running_loop().run_in_executor(None, self._login)
             logger.info(f"Connecting to {gateway_url}")
-            
+
             self._websocket = await asyncio.wait_for(
                 websockets.connect(gateway_url),
                 timeout=self.options.timeout
             )
             
             self.state.connected = True
-            self.state.reconnect_attempts = 0
-            
+
             logger.info("Connected to MudVault Mesh")
             self._emit("connected")
-            
-            # Start background tasks
+
+            # The gateway closes sockets that send anything before login.
+            await self._authenticate(token)
+            self.state.reconnect_attempts = 0
             self._start_background_tasks()
-            
-            # Authenticate
-            await self._authenticate()
-            
+
             # Start listening for messages
             await self._listen()
             
@@ -159,6 +185,10 @@ class MeshClient:
             raise ConnectionError("Connection timeout")
         except Exception as e:
             logger.error(f"Connection failed: {e}")
+            self.state.connected = False
+            if self._websocket:
+                await self._websocket.close()
+                self._websocket = None
             raise ConnectionError(f"Failed to connect: {e}")
     
     async def disconnect(self) -> None:
@@ -181,28 +211,55 @@ class MeshClient:
         
         self._emit("disconnected", {"code": 1000, "reason": "Normal closure"})
     
-    async def _authenticate(self) -> None:
-        """Authenticate with the gateway."""
+    def _login(self) -> str:
+        """Exchange the API key for a session token."""
+        base = self.options.api_url
+        if not base:
+            parts = urllib.parse.urlsplit(self._gateway_url)
+            scheme = "https" if parts.scheme == "wss" else "http"
+            base = urllib.parse.urlunsplit((scheme, parts.netloc, "/api/v1", "", ""))
+        request = urllib.request.Request(
+            base.rstrip("/") + "/auth/login",
+            data=json.dumps({"mudName": self.options.mud_name, "apiKey": self._api_key}).encode(),
+            headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.options.timeout) as reply:
+                token = json.load(reply).get("token")
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                raise ConnectionError("Invalid MUD name or API key") from None
+            raise ConnectionError(f"Login failed with HTTP {e.code}") from None
+        if not token:
+            raise ConnectionError("Login reply did not include a token")
+        return token
+
+    async def _authenticate(self, token: str) -> None:
+        """Authenticate with the gateway and wait for its reply."""
         auth_message = create_message(
             "auth",
             MessageEndpoint(mud=self.options.mud_name),
             MessageEndpoint(mud="Gateway"),
             AuthPayload(
                 mud_name=self.options.mud_name,
-                token=self._api_key
+                token=token
             )
         )
-        
+
         await self._send_message(auth_message)
-        
-        # Wait a bit for potential auth error
-        await asyncio.sleep(1.0)
-        
-        if self.state.connected:  # If still connected, assume auth succeeded
-            self.state.authenticated = True
-            logger.info("Authenticated with MudVault Mesh")
-            self._emit("authenticated")
-    
+
+        while True:
+            raw = await asyncio.wait_for(self._websocket.recv(), timeout=self.options.timeout)
+            reply = json.loads(raw)
+            if reply.get("type") == "auth":
+                break
+            if reply.get("type") == "error":
+                raise ConnectionError(reply.get("payload", {}).get("message", "Authentication failed"))
+
+        self.state.authenticated = True
+        logger.info("Authenticated with MudVault Mesh")
+        self._emit("authenticated")
+
     async def _listen(self) -> None:
         """Listen for incoming messages."""
         try:
@@ -404,39 +461,19 @@ class MeshClient:
         if not self._websocket or not self.state.connected:
             raise RuntimeError("Not connected to gateway")
         
-        # Convert message to dict for JSON serialization
         message_dict = {
             "version": message.version,
             "id": message.id,
             "timestamp": message.timestamp,
             "type": message.type,
-            "from": {
-                "mud": message.from_endpoint.mud,
-                "user": message.from_endpoint.user,
-                "displayName": message.from_endpoint.display_name,
-                "channel": message.from_endpoint.channel,
-            },
-            "to": {
-                "mud": message.to_endpoint.mud,
-                "user": message.to_endpoint.user,
-                "displayName": message.to_endpoint.display_name,
-                "channel": message.to_endpoint.channel,
-            },
-            "payload": message.payload.__dict__ if hasattr(message.payload, '__dict__') else message.payload,
-            "metadata": message.metadata.__dict__ if hasattr(message.metadata, '__dict__') else message.metadata,
+            "from": _to_wire(message.from_endpoint),
+            "to": _to_wire(message.to_endpoint),
+            "payload": _to_wire(message.payload),
+            "metadata": _to_wire(message.metadata),
         }
-        
         if message.signature:
             message_dict["signature"] = message.signature
-        
-        # Remove None values to clean up JSON
-        def remove_none(obj):
-            if isinstance(obj, dict):
-                return {k: remove_none(v) for k, v in obj.items() if v is not None}
-            return obj
-        
-        message_dict = remove_none(message_dict)
-        
+
         try:
             await self._websocket.send(json.dumps(message_dict))
         except Exception as e:

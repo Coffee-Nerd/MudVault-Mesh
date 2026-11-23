@@ -32,7 +32,7 @@ async def main():
     
     # Connect to MudVault Mesh
     try:
-        await client.connect()  # Defaults to wss://mesh.mudvault.org
+        await client.connect(api_key="YOUR_API_KEY")  # Defaults to wss://mesh.mudvault.org/ws
         print('Connected to MudVault Mesh!')
         
         # Join a channel
@@ -329,7 +329,7 @@ class MUDMeshIntegration:
     async def start(self):
         """Start the mesh client."""
         try:
-            await self.client.connect()
+            await self.client.connect(api_key="YOUR_API_KEY")
             # Keep running
             while self.client.is_connected:
                 await asyncio.sleep(1)

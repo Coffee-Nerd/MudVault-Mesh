@@ -205,6 +205,7 @@ class ConnectionState:
 class MeshClientOptions:
     """Configuration options for MeshClient."""
     mud_name: str
+    api_url: Optional[str] = None
     auto_reconnect: bool = True
     reconnect_interval: float = 5.0
     max_reconnect_attempts: int = 10

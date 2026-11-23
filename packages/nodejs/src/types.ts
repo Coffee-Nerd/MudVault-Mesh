@@ -141,6 +141,8 @@ export interface ConnectionState {
 
 export interface MeshClientOptions {
   mudName: string;
+  /** HTTP API base. Derived from the gateway URL when omitted. */
+  apiUrl?: string;
   autoReconnect?: boolean;
   reconnectInterval?: number;
   maxReconnectAttempts?: number;

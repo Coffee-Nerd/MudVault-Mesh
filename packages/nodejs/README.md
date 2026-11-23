@@ -33,7 +33,7 @@ client.onChannel((message) => {
 // Connect to MudVault Mesh
 async function start() {
   try {
-    await client.connect(); // Defaults to wss://mesh.mudvault.org
+    await client.connect(undefined, 'YOUR_API_KEY'); // Defaults to wss://mesh.mudvault.org/ws
     console.log('Connected to MudVault Mesh!');
     
     // Join a channel

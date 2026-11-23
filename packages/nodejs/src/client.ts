@@ -18,6 +18,8 @@ import {
   createPongMessage
 } from './utils';
 
+const DEFAULT_GATEWAY = 'wss://mesh.mudvault.org/ws';
+
 export class MeshClient extends EventEmitter {
   private ws: WebSocket | null = null;
   private options: Required<MeshClientOptions>;
@@ -29,12 +31,15 @@ export class MeshClient extends EventEmitter {
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private gatewayUrl: string = '';
+  private apiKey?: string;
+  private pendingAuth: { resolve: () => void; reject: (error: Error) => void } | null = null;
 
   constructor(options: MeshClientOptions) {
     super();
     
     this.options = {
       mudName: options.mudName,
+      apiUrl: options.apiUrl ?? '',
       autoReconnect: options.autoReconnect ?? true,
       reconnectInterval: options.reconnectInterval ?? 5000,
       maxReconnectAttempts: options.maxReconnectAttempts ?? 10,
@@ -47,12 +52,20 @@ export class MeshClient extends EventEmitter {
     }
   }
 
-  public async connect(gatewayUrl: string = 'wss://mesh.mudvault.org', apiKey?: string): Promise<void> {
+  public async connect(gatewayUrl: string = DEFAULT_GATEWAY, apiKey?: string): Promise<void> {
     if (this.state.connected) {
       throw new Error('Already connected');
     }
 
     this.gatewayUrl = gatewayUrl;
+    if (apiKey !== undefined) {
+      this.apiKey = apiKey;
+    }
+    if (!this.apiKey) {
+      throw new Error('An API key is required');
+    }
+
+    const token = await this.login();
 
     return new Promise((resolve, reject) => {
       try {
@@ -66,10 +79,9 @@ export class MeshClient extends EventEmitter {
         this.ws.on('open', () => {
           clearTimeout(connectTimeout);
           this.state.connected = true;
-          this.state.reconnectAttempts = 0;
-          
+
           this.emit('connected');
-          this.authenticate(apiKey).then(() => {
+          this.authenticate(token).then(() => {
             resolve();
           }).catch(reject);
         });
@@ -123,25 +135,45 @@ export class MeshClient extends EventEmitter {
     this.state.authenticated = false;
   }
 
-  private async authenticate(apiKey?: string): Promise<void> {
-    const authMessage = createMessage(
-      'auth',
-      { mud: this.options.mudName },
-      { mud: 'Gateway' },
-      {
-        mudName: this.options.mudName,
-        token: apiKey
-      }
-    );
+  private async login(): Promise<string> {
+    let base = this.options.apiUrl;
+    if (!base) {
+      const url = new URL(this.gatewayUrl);
+      url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
+      url.pathname = '/api/v1';
+      url.search = '';
+      base = url.toString();
+    }
 
-    this.sendMessage(authMessage);
-    this.startHeartbeat();
-    
-    // Authentication success is implied if no error is received
-    setTimeout(() => {
-      this.state.authenticated = true;
-      this.emit('authenticated');
-    }, 1000);
+    const response = await fetch(`${base.replace(/\/$/, '')}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mudName: this.options.mudName, apiKey: this.apiKey }),
+      signal: AbortSignal.timeout(this.options.timeout)
+    });
+    if (response.status === 401) {
+      throw new Error('Invalid MUD name or API key');
+    }
+    if (!response.ok) {
+      throw new Error(`Login failed with HTTP ${response.status}`);
+    }
+    const body = await response.json() as { token?: string };
+    if (!body.token) {
+      throw new Error('Login reply did not include a token');
+    }
+    return body.token;
+  }
+
+  private authenticate(token: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.pendingAuth = { resolve, reject };
+      this.sendMessage(createMessage(
+        'auth',
+        { mud: this.options.mudName },
+        { mud: 'Gateway' },
+        { mudName: this.options.mudName, token }
+      ));
+    });
   }
 
   private handleMessage(data: WebSocket.Data): void {
@@ -165,9 +197,24 @@ export class MeshClient extends EventEmitter {
         case 'pong':
           this.handlePong(message);
           break;
-        case 'error':
-          this.emit('error', new Error(`Server error: ${(message.payload as any).message}`));
+        case 'auth':
+          this.state.authenticated = true;
+          this.state.reconnectAttempts = 0;
+          this.startHeartbeat();
+          this.emit('authenticated');
+          this.pendingAuth?.resolve();
+          this.pendingAuth = null;
           break;
+        case 'error': {
+          const failure = new Error(`Server error: ${(message.payload as any).message}`);
+          if (this.pendingAuth) {
+            this.pendingAuth.reject(failure);
+            this.pendingAuth = null;
+          } else {
+            this.emit('error', failure);
+          }
+          break;
+        }
         default:
           this.emit('message', message);
           this.emit(message.type, message);
@@ -202,6 +249,9 @@ export class MeshClient extends EventEmitter {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+
+    this.pendingAuth?.reject(new Error(`Connection closed during login (${code})`));
+    this.pendingAuth = null;
 
     this.emit('disconnected', { code, reason });
 
