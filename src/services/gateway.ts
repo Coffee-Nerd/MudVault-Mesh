@@ -744,6 +744,10 @@ export class Gateway extends EventEmitter {
   }
 
   private async storeMessage(message: MudVaultMessage): Promise<void> {
+    // Private traffic is routed, never persisted.
+    if (message.type !== 'channel') {
+      return;
+    }
     try {
       const key = `message_history:${message.type}`;
       await redisService.lpush(key, JSON.stringify(message));

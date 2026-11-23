@@ -1,8 +1,7 @@
 import express from 'express';
 import { authenticate, authService, AuthenticatedRequest } from '../middleware/auth';
 import { apiRateLimit, mudRateLimit, authRateLimit } from '../middleware/rateLimiter';
-import { createTellMessage } from '../utils/message';
-import { validateMessage } from '../utils/validation';
+import { validateMessage, validateMudName } from '../utils/validation';
 import channelService from '../services/channel';
 import userService from '../services/user';
 import redisService from '../services/redis';
@@ -13,14 +12,14 @@ const router = express.Router();
 // Authentication endpoints
 router.post('/auth/register', authRateLimit, async (req, res) => {
   try {
-    const { mudName, adminSecret } = req.body;
-    
-    if (!mudName) {
-      return res.status(400).json({ error: 'MUD name is required' });
+    const { mudName, adminSecret, rotate } = req.body;
+
+    if (typeof mudName !== 'string' || !validateMudName(mudName)) {
+      return res.status(400).json({ error: 'A valid MUD name is required' });
     }
 
-    const apiKey = await authService.generateApiKey(mudName, adminSecret);
-    
+    const apiKey = await authService.generateApiKey(mudName, adminSecret, rotate === true);
+
     res.json({
       message: 'MUD registered successfully',
       mudName,
@@ -28,21 +27,28 @@ router.post('/auth/register', authRateLimit, async (req, res) => {
       warning: 'Store this API key securely. It cannot be recovered.'
     });
   } catch (error) {
+    const reason = error instanceof Error ? error.message : '';
+    if (reason === 'FORBIDDEN') {
+      return res.status(403).json({ error: 'Registration is closed' });
+    }
+    if (reason === 'EXISTS') {
+      return res.status(409).json({ error: 'That MUD name is already registered' });
+    }
     logger.error('Error registering MUD:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    res.status(500).json({ error: 'Registration failed' });
   }
 });
 
 router.post('/auth/login', authRateLimit, async (req, res) => {
   try {
     const { mudName, apiKey } = req.body;
-    
+
     if (!mudName || !apiKey) {
       return res.status(400).json({ error: 'MUD name and API key are required' });
     }
 
     const token = await authService.authenticateWithApiKey(mudName, apiKey);
-    
+
     if (!token) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -64,40 +70,24 @@ router.post('/auth/logout', authenticate, (req: AuthenticatedRequest, res) => {
   if (token) {
     authService.revokeJWT(token);
   }
-  
+
   res.json({ message: 'Logged out successfully' });
 });
 
 // Message endpoints
-router.post('/messages/send', authenticate, mudRateLimit, async (req: AuthenticatedRequest, res) => {
-  try {
-    const validation = validateMessage(req.body);
-    if (validation.error) {
-      return res.status(400).json({ error: validation.error });
-    }
-
-    const message = validation.value!;
-    message.from.mud = req.mud!.name;
-
-    // Store message for delivery
-    await redisService.lpush('outbound_messages', JSON.stringify(message));
-    
-    res.json({
-      message: 'Message queued for delivery',
-      id: message.id,
-      timestamp: message.timestamp
-    });
-  } catch (error) {
-    logger.error('Error sending message:', error);
-    res.status(500).json({ error: 'Failed to send message' });
-  }
+router.post('/messages/send', authenticate, (_req, res) => {
+  res.status(410).json({ error: 'Send messages over the WebSocket connection' });
 });
 
 router.get('/messages/history/:type', authenticate, apiRateLimit, async (req: AuthenticatedRequest, res) => {
   try {
     const { type } = req.params;
-    const limit = parseInt(req.query.limit as string) || 50;
-    const offset = parseInt(req.query.offset as string) || 0;
+    // Only public channel traffic is readable. Tells and the rest are private.
+    if (type !== 'channel') {
+      return res.status(403).json({ error: 'Only channel history is available' });
+    }
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 100);
+    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
     const messages = await redisService.lrange(`message_history:${type}`, offset, offset + limit - 1);
     const parsedMessages = messages.map(msg => JSON.parse(msg));
@@ -116,31 +106,8 @@ router.get('/messages/history/:type', authenticate, apiRateLimit, async (req: Au
 });
 
 // Tell endpoints
-router.post('/tell', authenticate, mudRateLimit, async (req: AuthenticatedRequest, res) => {
-  try {
-    const { to, message } = req.body;
-    
-    if (!to || !to.mud || !to.user || !message) {
-      return res.status(400).json({ error: 'Target mud, user, and message are required' });
-    }
-
-    const tellMessage = createTellMessage(
-      { mud: req.mud!.name, user: req.body.from?.user || 'System' },
-      to,
-      message
-    );
-
-    await redisService.lpush('outbound_messages', JSON.stringify(tellMessage));
-    
-    res.json({
-      message: 'Tell sent successfully',
-      id: tellMessage.id,
-      to: `${to.user}@${to.mud}`
-    });
-  } catch (error) {
-    logger.error('Error sending tell:', error);
-    res.status(500).json({ error: 'Failed to send tell' });
-  }
+router.post('/tell', authenticate, (_req, res) => {
+  res.status(410).json({ error: 'Send tells over the WebSocket connection' });
 });
 
 // Channel endpoints
@@ -165,7 +132,7 @@ router.post('/channels/:name/join', authenticate, mudRateLimit, async (req: Auth
   try {
     const { name } = req.params;
     const { user } = req.body;
-    
+
     if (!user) {
       return res.status(400).json({ error: 'User information is required' });
     }
@@ -177,7 +144,7 @@ router.post('/channels/:name/join', authenticate, mudRateLimit, async (req: Auth
     };
 
     await channelService.joinChannel(name, userEndpoint);
-    
+
     res.json({
       message: `Successfully joined channel ${name}`,
       channel: name,
@@ -193,7 +160,7 @@ router.post('/channels/:name/leave', authenticate, mudRateLimit, async (req: Aut
   try {
     const { name } = req.params;
     const { user } = req.body;
-    
+
     if (!user) {
       return res.status(400).json({ error: 'User information is required' });
     }
@@ -205,7 +172,7 @@ router.post('/channels/:name/leave', authenticate, mudRateLimit, async (req: Aut
     };
 
     await channelService.leaveChannel(name, userEndpoint);
-    
+
     res.json({
       message: `Successfully left channel ${name}`,
       channel: name,
@@ -221,7 +188,7 @@ router.post('/channels/:name/message', authenticate, mudRateLimit, async (req: A
   try {
     const { name } = req.params;
     const { user, message } = req.body;
-    
+
     if (!user || !message) {
       return res.status(400).json({ error: 'User and message are required' });
     }
@@ -233,7 +200,7 @@ router.post('/channels/:name/message', authenticate, mudRateLimit, async (req: A
     };
 
     await channelService.sendMessage(name, userEndpoint, message);
-    
+
     res.json({
       message: `Message sent to channel ${name}`,
       channel: name,
@@ -251,7 +218,7 @@ router.get('/channels/:name/history', authenticate, apiRateLimit, async (req: Au
     const limit = parseInt(req.query.limit as string) || 50;
 
     const history = await channelService.getChannelHistory(name, limit);
-    
+
     res.json({
       channel: name,
       history,
@@ -267,7 +234,7 @@ router.get('/channels/:name/members', authenticate, apiRateLimit, async (req: Au
   try {
     const { name } = req.params;
     const members = await channelService.getChannelMembers(name);
-    
+
     res.json({
       channel: name,
       members,
@@ -284,7 +251,7 @@ router.get('/users/online', authenticate, apiRateLimit, async (req: Authenticate
   try {
     const { mud } = req.query;
     const users = userService.getOnlineUsers(mud as string);
-    
+
     res.json({
       users,
       count: users.length,
@@ -300,7 +267,7 @@ router.get('/users/locate/:username', authenticate, apiRateLimit, async (req: Au
   try {
     const { username } = req.params;
     const locations = await userService.locateUser(username);
-    
+
     res.json({
       username,
       locations,
@@ -315,13 +282,13 @@ router.get('/users/locate/:username', authenticate, apiRateLimit, async (req: Au
 router.get('/users/search', authenticate, apiRateLimit, async (req: AuthenticatedRequest, res) => {
   try {
     const { q, limit } = req.query;
-    
+
     if (!q) {
       return res.status(400).json({ error: 'Query parameter "q" is required' });
     }
 
     const users = await userService.searchUsers(q as string, parseInt(limit as string) || 10);
-    
+
     res.json({
       query: q,
       users,
@@ -360,7 +327,7 @@ router.post('/muds/:name/who', authenticate, mudRateLimit, async (req: Authentic
   try {
     const { name } = req.params;
     const users = await userService.getOnlineUsersFromRedis(name);
-    
+
     res.json({
       mud: name,
       users,

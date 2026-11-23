@@ -1,4 +1,5 @@
-import dotenv from 'dotenv';
+// Must stay first: auth, redis and logger read process.env at import time.
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -9,9 +10,6 @@ import redisService from './services/redis';
 import userService from './services/user';
 import channelService from './services/channel';
 import logger from './utils/logger';
-
-// Load environment variables
-dotenv.config();
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '8080');
@@ -39,8 +37,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-MUD-Name']
 }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '64kb' }));
+app.use(express.urlencoded({ extended: true, limit: '64kb' }));
 
 // Trust proxy if configured
 if (process.env.TRUST_PROXY === 'true') {
@@ -220,8 +218,8 @@ async function startServer() {
     });
 
     process.on('unhandledRejection', (reason, promise) => {
-      logger.error('Unhandled rejection at:', promise, 'reason:', reason);
-      process.exit(1);
+      // One failed send (Discord, Redis) must not take the whole mesh down.
+      logger.error('Unhandled rejection:', reason instanceof Error ? reason.stack : reason);
     });
 
   } catch (error) {

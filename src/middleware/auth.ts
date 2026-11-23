@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { Request, Response, NextFunction } from 'express';
@@ -17,7 +18,10 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
+const JWT_SECRET = process.env.JWT_SECRET as string;
+if (!JWT_SECRET || JWT_SECRET.length < 32 || JWT_SECRET === 'your-secret-key-change-this') {
+  throw new Error('JWT_SECRET must be set to a strong value');
+}
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 export class AuthService {
@@ -45,10 +49,27 @@ export class AuthService {
     }
   }
 
-  public async generateApiKey(mudName: string, adminSecret?: string): Promise<string> {
-    // Simple admin verification for initial setup
-    if (adminSecret && adminSecret !== process.env.ADMIN_SECRET) {
-      throw new Error('Invalid admin secret');
+  private adminSecretValid(provided?: string): boolean {
+    const expected = process.env.ADMIN_SECRET;
+    if (!expected || expected.length < 32 || typeof provided !== 'string') {
+      return false;
+    }
+    const a = crypto.createHash('sha256').update(provided).digest();
+    const b = crypto.createHash('sha256').update(expected).digest();
+    return crypto.timingSafeEqual(a, b);
+  }
+
+  public async generateApiKey(mudName: string, adminSecret?: string, rotate = false): Promise<string> {
+    if (!this.adminSecretValid(adminSecret)) {
+      throw new Error('FORBIDDEN');
+    }
+
+    // Names are case-insensitive on the mesh, so "dark-wizardry" must not be
+    // able to coexist with "Dark-Wizardry" under a different key.
+    const registered = await redisService.smembers('api_keys');
+    const clash = registered.find(n => n.toLowerCase() === mudName.toLowerCase());
+    if (clash && (!rotate || clash !== mudName)) {
+      throw new Error('EXISTS');
     }
 
     const apiKey = this.generateRandomKey();
@@ -143,14 +164,7 @@ export class AuthService {
   }
 
   private generateRandomKey(): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    
-    for (let i = 0; i < 32; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    
-    return result;
+    return crypto.randomBytes(32).toString('hex');
   }
 
   private parseExpiration(expiration: string): number {

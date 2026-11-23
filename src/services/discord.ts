@@ -148,7 +148,8 @@ export class DiscordService extends EventEmitter {
         content: (message.payload as any).message?.substring(0, 100) + ((message.payload as any).message?.length > 100 ? '...' : ''),
         timestamp: message.timestamp
       });
-      this.handleIMCChannelMessage(message);
+      Promise.resolve(this.handleIMCChannelMessage(message)).catch(err =>
+        this.logger.error('Discord bridge: handleIMCChannelMessage failed', { error: err instanceof Error ? err.message : String(err) }));
     });
 
     this.imcClient.on('tell', (message: MudVaultMessage) => {
@@ -157,7 +158,8 @@ export class DiscordService extends EventEmitter {
         to: `${message.to.user}@${message.to.mud}`,
         content: (message.payload as any).message?.substring(0, 100) + ((message.payload as any).message?.length > 100 ? '...' : ''),
       });
-      this.handleIMCTellMessage(message);
+      Promise.resolve(this.handleIMCTellMessage(message)).catch(err =>
+        this.logger.error('Discord bridge: handleIMCTellMessage failed', { error: err instanceof Error ? err.message : String(err) }));
     });
 
     this.imcClient.on('who', (message: MudVaultMessage) => {
@@ -165,7 +167,8 @@ export class DiscordService extends EventEmitter {
         from: message.from.mud,
         userCount: (message.payload as any).users?.length || 0
       });
-      this.handleIMCWhoResponse(message);
+      Promise.resolve(this.handleIMCWhoResponse(message)).catch(err =>
+        this.logger.error('Discord bridge: handleIMCWhoResponse failed', { error: err instanceof Error ? err.message : String(err) }));
     });
 
     // Handle verification from MUD side  
@@ -345,14 +348,14 @@ export class DiscordService extends EventEmitter {
     });
     
     // Convert ANSI colors and create embed
-    const formattedContent = this.convertAnsiToDiscord((message.payload as any).message);
+    const formattedContent = String(this.convertAnsiToDiscord((message.payload as any).message) ?? '').slice(0, 3900);
     
     const embed = new EmbedBuilder()
       .setAuthor({
         name: message.from.mud,
         iconURL: 'https://cdn.discordapp.com/emojis/🌍.png' // Earth emoji for MUD icon
       })
-      .setTitle(message.from.user || 'Unknown')
+      .setTitle(String(message.from.user || 'Unknown').slice(0, 200))
       .setDescription(`\`\`\`ansi\n${formattedContent}\n\`\`\``)
       .setTimestamp(new Date(message.timestamp))
       .setFooter({
@@ -394,7 +397,7 @@ export class DiscordService extends EventEmitter {
           name: message.from.mud,
           iconURL: 'https://cdn.discordapp.com/emojis/🌍.png'
         })
-        .setTitle(`[#${mudChannelName}] ${message.from.user || 'Unknown'}`)
+        .setTitle(`[#${mudChannelName}] ${message.from.user || 'Unknown'}`.slice(0, 200))
         .setDescription(`\`\`\`ansi\n${formattedContent}\n\`\`\``)
         .setTimestamp(new Date(message.timestamp))
         .setFooter({
@@ -421,7 +424,7 @@ export class DiscordService extends EventEmitter {
     if (targetMapping) {
       try {
         const discordUser = await this.discordClient.users.fetch(targetMapping.discordId);
-        const formattedContent = this.convertAnsiToDiscord((message.payload as any).message);
+        const formattedContent = String(this.convertAnsiToDiscord((message.payload as any).message) ?? '').slice(0, 3900);
         
         const embed = new EmbedBuilder()
           .setTitle(`Tell from ${message.from.user}@${message.from.mud}`)
