@@ -1,8 +1,14 @@
+import crypto from 'crypto';
 import { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, ChannelType } from 'discord.js';
 import { EventEmitter } from 'events';
 import { MudVaultClient } from '../clients/nodejs';
 import { MudVaultMessage } from '../types';
 import winston from 'winston';
+import redisService from './redis';
+import { normalizeMudName } from '../utils/validation';
+
+const USER_MAPPINGS_KEY = 'discord_user_mappings:v1';
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 interface DiscordConfig {
   enabled: boolean;
@@ -33,7 +39,13 @@ export class DiscordService extends EventEmitter {
   private userMappings: Map<string, UserMapping> = new Map();
   private verificationCodes: Map<string, { discordId: string; mudName: string; mudUsername: string; expires: Date }> = new Map();
 
-  constructor(config: DiscordConfig, logger: winston.Logger, private mudvaultUrl: string, private gatewayToken?: string) {
+  constructor(
+    config: DiscordConfig,
+    logger: winston.Logger,
+    private mudvaultUrl: string,
+    private gatewayToken?: string,
+    private listMuds: () => Array<{ name: string; uptime?: number }> = () => []
+  ) {
     super();
     this.config = config;
     this.logger = logger;
@@ -56,7 +68,9 @@ export class DiscordService extends EventEmitter {
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent
-      ]
+      ],
+      // Text from other games must never be able to ping anyone.
+      allowedMentions: { parse: [] }
     });
 
     // Initialize IMC client  
@@ -79,7 +93,8 @@ export class DiscordService extends EventEmitter {
     }
 
     this.logger.info('Starting Discord service...');
-    
+    await this.loadUserMappings();
+
     // Start Discord bot
     await this.discordClient.login(this.config.token);
     
@@ -101,6 +116,31 @@ export class DiscordService extends EventEmitter {
     this.logger.info('Discord service stopped');
   }
 
+  private async loadUserMappings(): Promise<void> {
+    try {
+      const stored = await redisService.get(USER_MAPPINGS_KEY);
+      if (stored) {
+        for (const mapping of JSON.parse(stored) as UserMapping[]) {
+          this.userMappings.set(mapping.discordId, { ...mapping, verifiedAt: mapping.verifiedAt ? new Date(mapping.verifiedAt) : undefined });
+        }
+      }
+    } catch (error) {
+      this.logger.error('Could not load Discord account links', { error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  private saveUserMappings(): void {
+    redisService.set(USER_MAPPINGS_KEY, JSON.stringify(Array.from(this.userMappings.values()))).catch(() => undefined);
+  }
+
+  private verificationCode(): string {
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+      code += CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)];
+    }
+    return code;
+  }
+
   private setupDiscordEvents(): void {
     this.discordClient.on('ready', () => {
       this.logger.info(`Discord bot logged in as ${this.discordClient.user?.tag}`);
@@ -119,7 +159,8 @@ export class DiscordService extends EventEmitter {
         isMapped: this.getMudChannelFromDiscordId(message.channel.id) !== null
       });
       
-      await this.handleDiscordMessage(message);
+      await this.handleDiscordMessage(message).catch(error =>
+        this.logger.warn('Discord message could not be bridged', { error: error instanceof Error ? error.message : String(error) }));
     });
 
     this.discordClient.on('interactionCreate', async (interaction) => {
@@ -130,7 +171,8 @@ export class DiscordService extends EventEmitter {
       });
       
       if (interaction.isChatInputCommand()) {
-        await this.handleSlashCommand(interaction);
+        await this.handleSlashCommand(interaction).catch(error =>
+          this.logger.warn('Slash command failed', { error: error instanceof Error ? error.message : String(error) }));
       }
     });
   }
@@ -185,8 +227,6 @@ export class DiscordService extends EventEmitter {
         if (parts.length >= 2) {
           const code = parts[1].toUpperCase(); // Make case-insensitive
           this.logger.debug('DEBUG: Processing Discord verification', {
-            originalCode: parts[1],
-            normalizedCode: code,
             mudName: message.from.mud,
             username: message.from.user
           });
@@ -230,7 +270,8 @@ export class DiscordService extends EventEmitter {
     this.discordClient.on('ready', async () => {
       const guild = this.discordClient.guilds.cache.get(this.config.guildId);
       if (guild) {
-        await guild.commands.set(commands);
+        await guild.commands.set(commands).catch(error =>
+          this.logger.warn('Could not register slash commands', { error: error instanceof Error ? error.message : String(error) }));
       }
     });
   }
@@ -274,8 +315,7 @@ export class DiscordService extends EventEmitter {
         .setTitle('Verification Required')
         .setDescription('Use `/verify <mud> <character>` to link your account first.');
       
-      await message.reply({ embeds: [embed], ephemeral: true });
-      await message.delete();
+      await message.reply({ embeds: [embed] });
       return;
     }
 
@@ -326,8 +366,14 @@ export class DiscordService extends EventEmitter {
   }
 
   private async handleIMCChannelMessage(message: MudVaultMessage): Promise<void> {
+    // Join and leave notices carry no text to show.
+    const action = (message.payload as any).action;
+    if ((action && action !== 'message') || typeof (message.payload as any).message !== 'string') {
+      return;
+    }
+
     // Don't echo our own messages
-    if (message.from.mud === this.config.mudName) {
+    if (message.from.mud === normalizeMudName(this.config.mudName)) {
       this.logger.debug('DEBUG: Ignoring own message echo from', message.from.mud);
       return;
     }
@@ -352,8 +398,7 @@ export class DiscordService extends EventEmitter {
     
     const embed = new EmbedBuilder()
       .setAuthor({
-        name: message.from.mud,
-        iconURL: 'https://cdn.discordapp.com/emojis/🌍.png' // Earth emoji for MUD icon
+        name: message.from.mud
       })
       .setTitle(String(message.from.user || 'Unknown').slice(0, 200))
       .setDescription(`\`\`\`ansi\n${formattedContent}\n\`\`\``)
@@ -394,8 +439,7 @@ export class DiscordService extends EventEmitter {
       // Add channel prefix for bridge channel to show which channel it's from
       const bridgeEmbed = new EmbedBuilder()
         .setAuthor({
-          name: message.from.mud,
-          iconURL: 'https://cdn.discordapp.com/emojis/🌍.png'
+          name: message.from.mud
         })
         .setTitle(`[#${mudChannelName}] ${message.from.user || 'Unknown'}`.slice(0, 200))
         .setDescription(`\`\`\`ansi\n${formattedContent}\n\`\`\``)
@@ -474,7 +518,7 @@ export class DiscordService extends EventEmitter {
     });
     
     // Generate verification code
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const code = this.verificationCode();
     const expires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
     
     this.verificationCodes.set(code, {
@@ -485,7 +529,6 @@ export class DiscordService extends EventEmitter {
     });
 
     this.logger.info('🎟️ VERIFICATION CODE GENERATED', {
-      code: code,
       discordUserId: interaction.user.id,
       mudName: mud,
       character: character,
@@ -511,13 +554,12 @@ export class DiscordService extends EventEmitter {
     this.logger.debug('DEBUG: Attempting verification', {
       code,
       mudName,
-      username,
-      availableCodes: Array.from(this.verificationCodes.keys())
+      username
     });
 
     const verification = this.verificationCodes.get(code);
     if (!verification) {
-      this.logger.debug('DEBUG: Verification code not found', { code });
+      this.logger.debug('DEBUG: Verification code not found');
       // Send error message to MUD
       try {
         this.imcClient.sendTell({ mud: mudName, user: username }, 'Verification code not found or expired. Please try /verify again in Discord.');
@@ -528,7 +570,7 @@ export class DiscordService extends EventEmitter {
     }
 
     if (verification.expires < new Date()) {
-      this.logger.debug('DEBUG: Verification code expired', { code, expires: verification.expires });
+      this.logger.debug('DEBUG: Verification code expired', { expires: verification.expires });
       this.verificationCodes.delete(code);
       try {
         this.imcClient.sendTell({ mud: mudName, user: username }, 'Verification code expired. Please try /verify again in Discord.');
@@ -538,7 +580,8 @@ export class DiscordService extends EventEmitter {
       return;
     }
 
-    if (verification.mudName !== mudName || verification.mudUsername !== username) {
+    if (normalizeMudName(verification.mudName) !== normalizeMudName(mudName) ||
+        verification.mudUsername.toLowerCase() !== username.toLowerCase()) {
       this.logger.debug('DEBUG: Verification details mismatch', {
         expected: { mudName: verification.mudName, username: verification.mudUsername },
         received: { mudName, username }
@@ -562,6 +605,7 @@ export class DiscordService extends EventEmitter {
 
     this.userMappings.set(verification.discordId, mapping);
     this.verificationCodes.delete(code);
+    this.saveUserMappings();
 
     this.logger.info('DEBUG: User successfully verified', { 
       discordId: verification.discordId, 
@@ -579,15 +623,15 @@ export class DiscordService extends EventEmitter {
   }
 
   private async handleWhoCommand(interaction: any): Promise<void> {
-    await interaction.deferReply();
-    
-    // Request who list from network
-    this.imcClient.requestWho('*'); // Request from all MUDs
-    
-    // Wait for response (implement timeout)
-    setTimeout(async () => {
-      await interaction.editReply('Who list request timed out');
-    }, 5000);
+    const muds = this.listMuds().filter(mud => mud.name !== normalizeMudName(this.config.mudName));
+    const lines = muds.map(mud => `\u001b[1;36m${mud.name}\u001b[0m \u001b[0;90m(up ${this.formatIdleTime(mud.uptime ?? 0)})\u001b[0m`);
+    const embed = new EmbedBuilder()
+      .setTitle('🌍 Connected MUDs')
+      .setDescription(`\`\`\`ansi\n${(lines.join('\n') || 'No MUDs connected').slice(0, 3900)}\n\`\`\``)
+      .setColor(0x5865f2)
+      .setFooter({ text: `${muds.length} connected` })
+      .setTimestamp();
+    await interaction.reply({ embeds: [embed] });
   }
 
   private async handleChannelsCommand(interaction: any): Promise<void> {
@@ -788,7 +832,7 @@ export class DiscordService extends EventEmitter {
     // Log Discord service status every 5 minutes
     setInterval(() => {
       this.logServiceStatus();
-    }, 5 * 60 * 1000);
+    }, 5 * 60 * 1000).unref();
   }
 
   private logServiceStatus(): void {
@@ -837,7 +881,6 @@ export class DiscordService extends EventEmitter {
       if (verification.expires < new Date()) {
         this.verificationCodes.delete(code);
         this.logger.debug('🧹 EXPIRED VERIFICATION CODE CLEANED', {
-          code,
           discordId: verification.discordId,
           mudName: verification.mudName,
           username: verification.mudUsername
