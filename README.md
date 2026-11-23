@@ -1,410 +1,345 @@
-# MudVault Mesh - Modern Inter-MUD Communication Network
-
 <div align="center">
 
-[![Build Status](https://github.com/Coffee-Nerd/MudVault-Mesh/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/Coffee-Nerd/MudVault-Mesh/actions)
-[![Coverage](https://codecov.io/gh/Coffee-Nerd/MudVault-Mesh/branch/main/graph/badge.svg)](https://codecov.io/gh/Coffee-Nerd/MudVault-Mesh)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/r6kM56YrEV)
-[![Docker](https://img.shields.io/badge/Docker-Available-blue?logo=docker)](https://github.com/Coffee-Nerd/MudVault-Mesh/pkgs/container/mudvault-mesh)
+<img src="docs/assets/mesh-banner.svg" alt="MudVault Mesh: many worlds, one conversation" width="100%">
 
-**Production-ready inter-MUD communication protocol and gateway**
+<br>
 
-[Features](#features) • [Quick Start](#quick-start) • [Documentation](#documentation) • [Live Demo](#live-demo) • [Contributing](#contributing)
+[![Status: private preview](https://img.shields.io/badge/status-private%20preview-fabd2f?style=for-the-badge&labelColor=282828)](#-project-status)
+[![Protocol v1.0](https://img.shields.io/badge/protocol-v1.0-8ec07c?style=for-the-badge&labelColor=282828)](docs/PROTOCOL.md)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Node%2018+-83a598?style=for-the-badge&logo=typescript&logoColor=83a598&labelColor=282828)](#-run-your-own-gateway)
+[![MIT License](https://img.shields.io/badge/license-MIT-d3869b?style=for-the-badge&labelColor=282828)](package.json)
+[![Discord](https://img.shields.io/badge/discord-join-fe8019?style=for-the-badge&logo=discord&logoColor=fe8019&labelColor=282828)](https://discord.gg/r6kM56YrEV)
+
+**An open intermud network that lets players on different MUDs talk to each other.**
+<br>
+Built on plain WebSockets and JSON, so any codebase that can open a socket can join.
+
+[How it works](#-how-it-works) · [Features](#-features) · [Protocol](#-the-protocol) · [Self-host](#-run-your-own-gateway) · [Roadmap](#-roadmap) · [Contribute](#-contributing)
 
 </div>
 
 ---
 
-## 🚀 What is MudVault Mesh?
+> [!IMPORTANT]
+> **The hosted network is in private preview and is not accepting outside MUDs yet.** We are finishing connection security first. Follow along or ask about early access in [Discord](https://discord.gg/r6kM56YrEV).
 
-MudVault Mesh is a **complete, production-ready** inter-MUD communication system that connects MUD servers worldwide through a modern WebSocket-based protocol. It replaces legacy IMC systems with a secure, scalable, and developer-friendly network.
+## ✦ Why MudVault Mesh?
 
-### ✨ Why Choose MudVault Mesh?
+MUD communities are small, scattered, and full of people who would enjoy meeting each other. Intermud networks have connected them for decades, but they often depend on old protocols that are hard to implement in a modern codebase.
 
-- 🌐 **Production Ready**: Fully tested with comprehensive CI/CD
-- 🔒 **Secure by Design**: TLS encryption, JWT auth, rate limiting
-- 🚀 **High Performance**: Handles thousands of concurrent connections
-- 📱 **Modern Protocol**: JSON messages over WebSocket
-- 🛠️ **Easy Integration**: Simple client libraries for any language
-- 📊 **Discord Integration**: Bridge your MUD to Discord channels
-- 🐳 **Docker Ready**: One-command deployment
-- ✅ **100% Test Coverage**: Enterprise-grade reliability
+MudVault Mesh keeps the idea and modernizes the plumbing:
 
----
+<table>
+<tr>
+<td width="33%" valign="top">
 
-## 🎯 Features
+### 🔌 Simple to join
+One **outbound** connection. No port forwarding, no inbound firewall rules, and no relaying traffic for other games.
 
-### Core Protocol (✅ Complete)
-- **✅ Tell System**: Direct messages between players across MUDs
-- **✅ Channel System**: Multi-MUD chat channels with moderation
-- **✅ Who Queries**: List online players from any connected MUD
-- **✅ Finger/Locate**: Find and get info about users across the network
-- **✅ Presence Updates**: Real-time online/offline status
-- **✅ MUD Discovery**: Query connected MUDs and available channels
-- **✅ Emote System**: Action messages and targeted emotes
+</td>
+<td width="33%" valign="top">
 
-### Integration Features (✅ Complete)
-- **✅ Discord Bridge**: Seamless MUD ↔ Discord channel integration
-- **✅ WebSocket Gateway**: Real-time bidirectional communication
-- **✅ REST API**: HTTP endpoints for administration
-- **✅ Authentication**: JWT tokens and API key validation
-- **✅ Rate Limiting**: DDoS protection and abuse prevention
+### 🧾 Readable by design
+Every message is a small **JSON** envelope. You can debug it by eye and implement it in any language.
 
-### Developer Experience (✅ Complete)
-- **✅ Client Libraries**: Node.js and Python SDKs available
-- **✅ Protocol Documentation**: Complete message format specification
-- **✅ Integration Guide**: Step-by-step MUD implementation guide
-- **✅ Live Testing**: Public test server for development
-- **✅ Docker Deployment**: Production-ready containerization
+</td>
+<td width="33%" valign="top">
 
----
+### 🌉 Bridged to Discord
+Channels can reach **Discord**, so a community's conversation does not have to stop at the game's edge.
 
-## 🏃 Quick Start
+</td>
+</tr>
+</table>
 
-### For MUD Administrators
+## ⚙ How it works
 
-**Connect to our live test network in under 5 minutes!**
+<p align="center">
+  <img src="docs/assets/mesh-today.svg" alt="Three MUDs each connect out to one central gateway, which routes messages and bridges to Discord." width="100%">
+</p>
 
-#### 1. Test the Connection
+Your MUD logs in once, opens a WebSocket, and stays connected. The gateway validates every message and routes it to the right place:
+
+| You send to | What the gateway does |
+| :-- | :-- |
+| **A specific MUD** | Forwards the message to that MUD |
+| **`*`** | Broadcasts it to every other connected MUD |
+| **`Gateway`** | Answers directly, for things like the MUD list |
+
+### Connecting, step by step
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant M as Your MUD
+    participant H as Gateway HTTP
+    participant W as Gateway WebSocket
+    M->>H: POST /api/v1/auth/login (name + API key)
+    H-->>M: Session token
+    M->>W: WebSocket upgrade
+    W-->>M: 101 Switching Protocols
+    M->>W: auth message (name + token)
+    W-->>M: auth reply
+    loop Every 30 seconds
+        M->>W: ping
+        W-->>M: pong
+    end
+    M->>W: tell, channel, emote, who...
+    W-->>M: Messages from other MUDs
+```
+
+### So why is it called a *mesh*?
+
+Because that is where it is going. The goal is a network of **linked gateway nodes** with no single point of failure. **Today there is one gateway**, so the network is hub-and-spoke for now.
+
+<p align="center">
+  <img src="docs/assets/mesh-future.svg" alt="Planned network: three linked gateways, each serving its own MUDs." width="100%">
+</p>
+
+> [!NOTE]
+> A MUD is never a relay, today or in the planned design. MUDs stay simple clients, and gateways do the routing.
+
+## ◈ Features
+
+**Legend:** 🟢 working · 🟡 partial · 🔵 planned
+
+| | Feature | Notes |
+| :-: | :-- | :-- |
+| 🟢 | **Tells** | Private messages, such as `alice@other-mud` |
+| 🟢 | **Channels** | `ooc`, `chat`, `gossip`, `newbie`, and `admin` |
+| 🟢 | **Emotes** | Actions to a player or across the network |
+| 🟢 | **Who and finger** | Requests are forwarded to the target MUD to answer |
+| 🟢 | **MUD and channel lists** | See what is connected right now |
+| 🟢 | **Discord bridge** | Maps mesh channels to Discord channels |
+| 🟢 | **Authenticated sessions** | Admin-issued API keys, hashed with bcrypt, plus verified login tokens |
+| 🟢 | **Connection limits** | Login timeouts and per-IP and per-connection limits |
+| 🟢 | **Message validation** | Strict schemas and size limits on every message |
+| 🟡 | **Locate** | The message exists, but results are not yet player-accurate |
+| 🟡 | **Presence** | Defined in the protocol, not yet wired through clients |
+| 🟡 | **Client libraries** | Node.js and Python packages need updating for the login flow |
+| 🟡 | **Automated tests** | Unit and gateway tests run in CI, with more coverage to come |
+| 🔵 | **TLS encryption** | See the [roadmap](#-roadmap) |
+| 🔵 | **MudVault accounts and bans** | See the [roadmap](#-roadmap) |
+| 🔵 | **Multi-gateway mesh** | See the [roadmap](#-roadmap) |
+
+## ✉ The protocol
+
+Every message, of every type, uses the same envelope:
+
+```json
+{
+  "version": "1.0",
+  "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+  "timestamp": "2026-11-23T08:00:00.000Z",
+  "type": "channel",
+  "from": { "mud": "your-mud", "user": "alice", "displayName": "Alice" },
+  "to": { "mud": "*", "channel": "ooc" },
+  "payload": { "channel": "ooc", "message": "Hello, mesh!", "action": "message" },
+  "metadata": { "priority": 5, "ttl": 300, "encoding": "utf-8", "language": "en" }
+}
+```
+
+<details>
+<summary><b>Message types</b></summary>
+
+<br>
+
+| Type | Purpose | Payload |
+| :-- | :-- | :-- |
+| `tell` | Private message | `{ message }` |
+| `emote` / `emoteto` | Action | `{ action, target? }` |
+| `channel` | Channel message | `{ channel, message, action }` |
+| `who` | Who is online | `{ request: true }` or `{ users: [...] }` |
+| `finger` | Player details | `{ user, request: true }` or `{ user, info }` |
+| `locate` | Find a player | `{ user, request: true }` |
+| `presence` | Status change | `{ status, activity?, location? }` |
+| `mudlist` | Connected MUDs | `{ request: true }` |
+| `channels` | Available channels | `{ request: true }` |
+| `auth` | Session login | `{ mudName, token }` |
+| `ping` / `pong` | Heartbeat | `{ timestamp }` |
+| `error` | Something failed | `{ code, message }` |
+
+</details>
+
+<details>
+<summary><b>Limits and rules</b></summary>
+
+<br>
+
+| Rule | Value |
+| :-- | :-- |
+| MUD names | 3 to 32 letters, numbers, dashes, or underscores |
+| Channel names | 1 to 32 letters, numbers, dashes, or underscores |
+| Message text | 4,096 characters |
+| Formatted text | 8,192 characters |
+| WebSocket message | 64 KB |
+| Heartbeat | Send every 30 seconds. Silent connections drop after 60 |
+| Session token | 7 days |
+| Message age | Dropped once older than its `ttl`, so keep your clock in sync |
+
+</details>
+
+<details>
+<summary><b>Error codes</b></summary>
+
+<br>
+
+| Code | Meaning | Code | Meaning |
+| :-: | :-- | :-: | :-- |
+| `1000` | Invalid message | `1006` | Rate limited |
+| `1001` | Authentication failed | `1007` | Internal error |
+| `1002` | Unauthorized | `1008` | Protocol error |
+| `1003` | MUD not found | `1009` | Unsupported version |
+| `1004` | User not found | `1010` | Message too large |
+| `1005` | Channel not found | | |
+
+</details>
+
+## ⚒ Run your own gateway
+
+You need **Node.js 18+**, **Redis 6+**, and **OpenSSL**.
+
+**1. Install and build**
+
 ```bash
-# Test WebSocket connection
-wscat -c ws://ws.mesh.mudvault.org
-
-# Send authentication (replace TestMUD with your MUD name)
-{"version":"1.0","id":"test-001","timestamp":"2025-07-26T12:00:00Z","type":"auth","from":{"mud":"TestMUD"},"to":{"mud":"Gateway"},"payload":{"mudName":"TestMUD"},"metadata":{"priority":10,"ttl":300,"encoding":"utf-8","language":"en"}}
-```
-
-#### 2. Node.js Integration
-```javascript
-const { MudVaultClient } = require('./src/clients/nodejs');
-
-// Initialize client
-const client = new MudVaultClient('YourMudName');
-
-// Handle incoming tells
-client.on('tell', (message) => {
-  const sender = `${message.from.user}@${message.from.mud}`;
-  const target = message.to.user;
-  const text = message.payload.message;
-  
-  // Send to your MUD's player
-  sendToPlayer(target, `${sender} tells you: ${text}`);
-});
-
-// Handle channel messages
-client.on('channel', (message) => {
-  const channel = message.payload.channel;
-  const sender = `${message.from.user}@${message.from.mud}`;
-  const text = message.payload.message;
-  
-  // Broadcast to channel subscribers
-  broadcastToChannel(channel, `[${channel}] ${sender}: ${text}`);
-});
-
-// Connect to live server
-client.connect('ws://ws.mesh.mudvault.org');
-```
-
-#### 3. Python Integration
-```python
-# Coming soon - Node.js client available now
-# See docs/IMPLEMENTATION_GUIDE.md for WebSocket implementation
-```
-
-### For Self-Hosting
-
-#### Docker Deployment (Recommended)
-```bash
-# Clone repository
 git clone https://github.com/Coffee-Nerd/MudVault-Mesh.git
-cd mudvault-mesh
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your settings
-
-# Start with Docker Compose
-docker-compose up -d
-
-# Your gateway is now running on:
-# WebSocket: ws://localhost:8082
-# API: http://localhost:8084
-# Discord integration: Configured via .env
-
-# For production deployment:
-# WebSocket: ws://ws.mesh.mudvault.org
-# API: http://mesh.mudvault.org
-```
-
-#### Manual Installation
-```bash
-# Prerequisites: Node.js 18+, Redis 6+
+cd MudVault-Mesh
 npm install
 npm run build
+```
 
-# Set environment variables
-export REDIS_URL=redis://localhost:6379
-export JWT_SECRET=your-secret-key
+**2. Configure it with fresh secrets**
 
-# Start the gateway
+```bash
+cp .env.example .env
+sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -hex 32)|" .env
+sed -i "s|^DISCORD_ENABLED=.*|DISCORD_ENABLED=false|" .env
+printf '\nADMIN_SECRET=%s\n' "$(openssl rand -hex 32)" >> .env
+chmod 600 .env
+```
+
+**3. Start it**
+
+```bash
 npm start
 ```
 
----
-
-## 📚 Documentation
-
-### Core Documentation
-- **[Protocol Specification](docs/PROTOCOL_FULL.md)**: Complete protocol specification with examples
-- **[Command Reference](docs/COMMANDS.md)**: JSON message formats for all commands
-- **[Implementation Guide](docs/IMPLEMENTATION_GUIDE.md)**: Step-by-step MUD integration
-- **[Deployment Guide](DEPLOYMENT.md)**: Production deployment instructions
-
-### Development
-- **[Contributing Guide](CONTRIBUTING.md)**: How to contribute to the project
-- **[Testing Guide](tests/README.md)**: Comprehensive testing documentation
-- **[API Documentation](docs/API.md)**: REST API reference *(coming soon)*
-
-### Live Examples
-- **Test Server**: `ws://ws.mesh.mudvault.org` (24/7 available for testing)
-- **API Server**: `http://mesh.mudvault.org` (REST API endpoints)
-- **Protocol Tests**: Run `node test-messages.js` to test all commands
-- **Integration Tests**: Full test suite with 100% protocol coverage
-
----
-
-## 🌐 Live Demo
-
-### Public Test Server
-**WebSocket Endpoint**: `ws://ws.mesh.mudvault.org`  
-**API Endpoint**: `http://mesh.mudvault.org`
-
-**Available 24/7 for testing and development!**
+**4. In a second terminal, check it and register a MUD**
 
 ```bash
-# Test API health
-curl http://mesh.mudvault.org/api/v1/health
+curl http://localhost:8080/api/v1/health
 
-# Test all protocol commands
-node test-messages.js
-
-# Test advanced features  
-node test-additional-commands.js
-
-# Manual WebSocket testing
-wscat -c ws://ws.mesh.mudvault.org
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d "{\"mudName\":\"My-Mud\",\"adminSecret\":\"$(grep ^ADMIN_SECRET .env | cut -d= -f2)\"}"
 ```
 
-### Discord Integration Demo
-Join our Discord server to see MudVault Mesh in action:
-- **Discord**: [MudVault Community](https://discord.gg/r6kM56YrEV)
-- **Live Bridge**: Watch real MUD messages in Discord channels
-- **Interactive Testing**: Send commands and see responses
+The reply contains your API key **once**, so save it somewhere private. With the example config, HTTP runs on `8080` and WebSocket on `8081`.
 
----
+> [!WARNING]
+> This setup is for **local development**. Do not expose a self-hosted gateway to the internet until the security items in the [roadmap](#-roadmap) are complete.
 
-## 🏗️ Architecture
+## ◆ Project status
 
-```
-┌─────────────────┐    WebSocket     ┌──────────────────┐
-│   Your MUD      │◄────────────────►│  MudVault Mesh   │
-│  (Any Language) │  JSON Messages   │     Gateway      │
-└─────────────────┘                  │                  │
-                                     │  ┌─────────────┐ │
-┌─────────────────┐                  │  │   Discord   │ │
-│   Other MUDs    │◄─────────────────┤  │   Bridge    │ │
-│                 │                  │  └─────────────┘ │
-└─────────────────┘                  │                  │
-                                     │  ┌─────────────┐ │
-┌─────────────────┐                  │  │    Redis    │ │
-│  Discord Users  │◄─────────────────┤  │   Storage   │ │
-│                 │                  │  └─────────────┘ │
-└─────────────────┘                  └──────────────────┘
-```
+| Area | Status |
+| :-- | :-- |
+| Core routing | 🟢 Running in production with Dark Wizardry |
+| Discord bridge | 🟢 Running |
+| Outside MUDs | 🟡 Private preview |
+| Encryption | 🔵 Not yet. Do not send passwords or sensitive data over the mesh |
+| Redundancy | 🔵 One gateway today |
 
-### Technology Stack
-- **Backend**: Node.js with TypeScript
-- **Protocol**: WebSocket with JSON messages  
-- **Storage**: Redis for session and message persistence
-- **Integration**: Discord.js for Discord bridge
-- **Security**: JWT authentication, rate limiting
-- **Testing**: Jest with 100% test coverage
-- **Deployment**: Docker with docker-compose
+## ➜ Roadmap
 
----
+### Phase 1: Harden the gateway `in progress`
 
-## 🔒 Security & Performance
+- [x] Close open registration and require an admin secret
+- [x] Stop one failed Discord send from taking the gateway down
+- [x] Stop storing private messages
+- [x] Verify session tokens on every WebSocket login
+- [x] Add connection, login, and message limits
+- [x] Keep MUD server addresses private
+- [ ] Encrypt all traffic with TLS
+- [ ] Add IP and account bans with an audit trail
 
-### Security Features
-- **🔐 TLS Encryption**: All connections encrypted by default
-- **🎫 JWT Authentication**: Secure token-based authentication  
-- **🛡️ Rate Limiting**: DDoS protection and abuse prevention
-- **✅ Input Validation**: All messages validated with Joi schemas
-- **🔍 Security Scanning**: Automated vulnerability detection
+### Phase 2: Open the network
 
-### Performance Metrics
-- **⚡ Low Latency**: <50ms message delivery
-- **📈 High Throughput**: 1000+ messages/second tested
-- **🔄 Concurrent Connections**: Hundreds of MUDs supported
-- **💾 Memory Efficient**: Optimized for long-running processes
-- **🏃 Fast Reconnection**: Automatic reconnection with exponential backoff
+- [ ] Publish the full admin setup guide
+- [ ] Add external uptime checks with Discord alerts
+- [x] Repair CI
+- [ ] Build a shared protocol test suite
+- [ ] Release updated client libraries and a reference C client
+- [ ] Welcome the first outside MUDs
 
----
+### Phase 3: Connect the MudVault ecosystem
 
-## 🗺️ Project Status & Roadmap
+- [ ] Sign in with a MudVault account
+- [ ] Chat on the mesh directly from the MudForge client
+- [ ] Reduce per-message overhead in logging, parsing, and storage
 
-### ✅ Phase 1: Core Protocol (COMPLETE)
-- ✅ Complete protocol specification (v1.0)
-- ✅ WebSocket gateway implementation
-- ✅ All message types (tell, channel, who, finger, locate, etc.)
-- ✅ Message validation and error handling
-- ✅ Comprehensive test suite (100% coverage)
+### Phase 4: Become a true mesh
 
-### ✅ Phase 2: Essential Features (COMPLETE)
-- ✅ JWT/API key authentication system
-- ✅ Redis-based message persistence
-- ✅ Channel moderation and management
-- ✅ Rate limiting and security features
-- ✅ Docker deployment configuration
+- [ ] Run a second gateway node
+- [ ] Add authenticated gateway-to-gateway links
+- [ ] Share the MUD registry, sessions, and bans between nodes
+- [ ] Prevent duplicates and routing loops using message IDs
+- [ ] Fail over automatically when a node goes down
+- [ ] Sign messages so they can be verified across nodes
 
-### ✅ Phase 3: Advanced Features (COMPLETE)
-- ✅ Discord integration and bridge
-- ✅ Real-time presence updates
-- ✅ MUD discovery and channel listing
-- ✅ Production-ready deployment
-- ✅ Comprehensive documentation
+## ▤ Project layout
 
-### ✅ Phase 4: Developer Experience (COMPLETE)
-- ✅ Client libraries (Node.js, Python planned)
-- ✅ Integration guide and examples
-- ✅ Live test server (ws.mesh.mudvault.org)
-- ✅ CI/CD pipeline with automated testing
-- ✅ GitHub Actions with security scanning
-
-### 🔮 Phase 5: Future Enhancements
-*Planned for future releases based on community feedback:*
-- 📱 Mobile applications and SDKs
-- 🤖 AI-powered moderation features  
-- 🌐 Multi-gateway federation
-- 📊 Advanced analytics and monitoring
-- 🔧 Plugin architecture for extensions
-
----
-
-## 🧪 Testing & Quality Assurance
-
-### Comprehensive Test Suite
-- **Unit Tests**: 80%+ coverage for all core functions
-- **Integration Tests**: Full WebSocket protocol testing  
-- **End-to-End Tests**: Live server protocol compliance
-- **Security Tests**: Automated vulnerability scanning
-- **Performance Tests**: Load testing and benchmarks
-
-### Continuous Integration
-- **✅ GitHub Actions**: Automated testing on every PR
-- **✅ Code Coverage**: Codecov integration with coverage reports
-- **✅ Security Scanning**: CodeQL and Snyk vulnerability detection
-- **✅ Dependency Updates**: Automated security updates via Dependabot
-- **✅ Docker Testing**: Container build and deployment validation
-
-### Quality Gates
-```bash
-# All checks must pass before merge
-npm run lint          # ESLint code quality
-npm run typecheck     # TypeScript validation  
-npm run test:coverage # Jest test suite
-npm run build         # Production build
+```text
+MudVault-Mesh/
+├── src/
+│   ├── index.ts              Server startup
+│   ├── routes/api.ts         HTTP API
+│   ├── middleware/           Auth and rate limiting
+│   ├── services/
+│   │   ├── gateway.ts        WebSocket gateway and routing
+│   │   ├── discord.ts        Discord bridge
+│   │   ├── channel.ts        Channels
+│   │   ├── user.ts           Users and presence
+│   │   └── redis.ts          Storage
+│   └── utils/                Validation, messages, logging
+├── packages/                 Node.js, Python, and Discord packages
+├── examples/dikumud/         Early C integration example
+├── tests/                    Jest tests
+└── docs/                     Protocol and API references
 ```
 
----
+## ▣ Documentation
 
-## 🤝 Contributing
+| Document | What is inside |
+| :-- | :-- |
+| [Protocol](docs/PROTOCOL.md) | Original protocol specification |
+| [Commands](docs/COMMANDS.md) | JSON examples for each command |
+| [HTTP API](docs/API.md) | REST endpoint reference |
+| [Integration](docs/INTEGRATION.md) | Early notes on adding the mesh to a MUD |
+| [Design](mudvault-mesh-design.md) | The original long-term vision |
 
-We welcome contributions from the MUD community! MudVault Mesh is built by MUD developers, for MUD developers.
+> [!NOTE]
+> Some older documents describe planned features as if they already exist. **This README is the source of truth for current status.**
 
-### Quick Start for Contributors
-```bash
-# 1. Fork and clone
-git clone https://github.com/Coffee-Nerd/MudVault-Mesh.git
-cd mudvault-mesh
+## ♥ Contributing
 
-# 2. Install dependencies  
-npm install
+MudVault Mesh is built by MUD people, for MUD people. Help is especially welcome with:
 
-# 3. Run tests
-npm test
+- **Client libraries** for C, C++, LPC, Rust, and Evennia
+- **Integration guides** for specific codebases
+- **Protocol tests** and wider test coverage
+- **Gateway federation** design and review
 
-# 4. Start development
-npm run dev
-```
+Read the [contributing guide](CONTRIBUTING.md), open an [issue](https://github.com/Coffee-Nerd/MudVault-Mesh/issues), or come talk to us on [Discord](https://discord.gg/r6kM56YrEV).
 
-### How to Contribute
-1. 🍴 **Fork the repository**
-2. 🌟 **Create a feature branch** (`git checkout -b feature/amazing-feature`)
-3. ✨ **Make your changes** (with tests!)
-4. ✅ **Run the test suite** (`npm run precommit`)
-5. 📝 **Commit your changes** (`git commit -m 'Add amazing feature'`)
-6. 🚀 **Push to the branch** (`git push origin feature/amazing-feature`)
-7. 🎯 **Open a Pull Request**
-
-See **[CONTRIBUTING.md](CONTRIBUTING.md)** for detailed guidelines.
-
-### Areas Where We Need Help
-- 🔧 **C/C++ Client Libraries**: Native libraries for traditional MUD codebases (LPC, C++, etc.)
-- 🐍 **Python SDK for Evennia**: Enhanced Python integration for Evennia-based MUDs
-- 🦀 **Rust Client**: High-performance client for Rust-based MUDs
-- 🎨 **Admin Dashboard**: Browser-based administration interface
-- 🌐 **Internationalization**: Multi-language support for global MUD communities
-- 📚 **Documentation**: More integration examples and MUD-specific guides
-- 🧪 **Testing**: Additional test coverage and performance benchmarks
-
----
-
-## 📊 Community & Support
-
-### Getting Help
-- **📖 Documentation**: [Complete docs](docs/) with examples
-- **🐛 Bug Reports**: [GitHub Issues](https://github.com/Coffee-Nerd/MudVault-Mesh/issues)
-- **💬 Discussions**: [GitHub Discussions](https://github.com/Coffee-Nerd/MudVault-Mesh/discussions)  
-- **🎮 Discord**: [Join our community](https://discord.gg/r6kM56YrEV)
-- **📧 Email**: support@mudvault.org
-
-### Project Statistics
-- **⭐ GitHub Stars**: Growing community of MUD developers
-- **🔀 Active Forks**: Multiple MUD implementations
-- **✅ Test Coverage**: 100% protocol compliance
-- **🚀 Uptime**: 99.9% availability on test server
-- **🌍 Global Reach**: MUDs connecting from multiple continents
-
----
-
-## 📄 License
-
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
-### Open Source Commitment
-MudVault Mesh is and will always remain **100% open source**. We believe in:
-- 🔓 **Transparency**: All code is publicly available
-- 🤝 **Community Ownership**: No vendor lock-in
-- 🆓 **Free Forever**: Core features always free
-- 🛠️ **Extensibility**: Build on top of our foundation
-
----
-
-## 🙏 Acknowledgments
-
-- **MUD Community**: For decades of innovation in online gaming
-- **Contributors**: Every developer who has contributed code, tests, or feedback
-- **Beta Testers**: MUD administrators who tested early versions
-- **Discord Community**: Active community providing feedback and support
+> [!CAUTION]
+> Please report security problems **privately** to a maintainer on Discord rather than in a public issue.
 
 ---
 
 <div align="center">
 
-**Made with ❤️ by the MUD community, for the MUD community**
+**MudVault Mesh** is released under the MIT License.
 
-[⭐ Star this repo](https://github.com/Coffee-Nerd/MudVault-Mesh) • [🍴 Fork and contribute](https://github.com/Coffee-Nerd/MudVault-Mesh/fork) • [💬 Join Discord](https://discord.gg/r6kM56YrEV)
+<sub>Many worlds. One conversation.</sub>
 
 </div>

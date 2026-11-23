@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 440" width="1000" height="440" role="img" aria-labelledby="t d">
+  <title id="t">How MudVault Mesh works today</title>
+  <desc id="d">Three MUDs each hold one outbound connection to a central gateway. The gateway contains routing, Redis, and a Discord bridge, and it relays all traffic.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8ec07c"/></marker>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#83a598"/></marker>
+  </defs>
+  <rect width="1000" height="440" rx="16" fill="#1d2021"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace">
+    <text x="40" y="48" font-size="22" font-weight="700" fill="#fabd2f">Today: one hosted gateway</text>
+    <text x="40" y="76" font-size="14" fill="#a89984">Each MUD dials out once. No inbound ports. MUDs never relay for each other.</text>
+
+    <g stroke="#8ec07c" stroke-width="2.5" fill="none" marker-start="url(#a)" marker-end="url(#a)">
+      <path d="M226 150 L392 214"/>
+      <path d="M226 250 L392 250"/>
+      <path d="M226 350 L392 286"/>
+    </g>
+    <path d="M668 250 L796 250" stroke="#83a598" stroke-width="2.5" marker-start="url(#b)" marker-end="url(#b)"/>
+    <text x="309" y="238" text-anchor="middle" font-size="12" fill="#8ec07c">WebSocket</text>
+
+    <g font-size="16" text-anchor="middle">
+      <rect x="46" y="118" width="180" height="62" rx="10" fill="#282828" stroke="#d3869b" stroke-width="2"/>
+      <text x="136" y="155" fill="#ebdbb2">MUD A</text>
+      <rect x="46" y="219" width="180" height="62" rx="10" fill="#282828" stroke="#83a598" stroke-width="2"/>
+      <text x="136" y="256" fill="#ebdbb2">MUD B</text>
+      <rect x="46" y="320" width="180" height="62" rx="10" fill="#282828" stroke="#fe8019" stroke-width="2"/>
+      <text x="136" y="357" fill="#ebdbb2">MUD C</text>
+
+      <rect x="396" y="118" width="268" height="266" rx="14" fill="#32302f" stroke="#fabd2f" stroke-width="2.5"/>
+      <text x="530" y="152" fill="#fabd2f" font-weight="700" font-size="18">Mesh Gateway</text>
+      <rect x="420" y="172" width="220" height="50" rx="8" fill="#282828" stroke="#665c54"/>
+      <text x="530" y="203" fill="#ebdbb2" font-size="14">Validate + route</text>
+      <rect x="420" y="234" width="220" height="50" rx="8" fill="#282828" stroke="#665c54"/>
+      <text x="530" y="265" fill="#ebdbb2" font-size="14">Discord bridge</text>
+      <rect x="420" y="296" width="220" height="50" rx="8" fill="#282828" stroke="#665c54"/>
+      <text x="530" y="327" fill="#ebdbb2" font-size="14">Redis: keys + history</text>
+
+      <rect x="800" y="219" width="160" height="62" rx="10" fill="#282828" stroke="#83a598" stroke-width="2"/>
+      <text x="880" y="256" fill="#ebdbb2">Discord</text>
+    </g>
+  </g>
+</svg>
