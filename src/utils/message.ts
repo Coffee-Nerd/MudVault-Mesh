@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { MudVaultMessage, MessageType, MessageEndpoint, MessagePayload, MessageMetadata } from '../types';
 
 export function createMessage(
@@ -18,7 +18,7 @@ export function createMessage(
 
   return {
     version: '1.0',
-    id: uuidv4(),
+    id: randomUUID(),
     timestamp: new Date().toISOString(),
     type,
     from,

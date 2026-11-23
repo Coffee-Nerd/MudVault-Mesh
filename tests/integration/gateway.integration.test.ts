@@ -1,5 +1,5 @@
 import WebSocket from 'ws';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { Gateway } from '../../src/services/gateway';
 import { authService } from '../../src/middleware/auth';
 
@@ -10,7 +10,7 @@ type Message = { type: string; from: any; to: any; payload: any };
 
 const envelope = (type: string, from: any, to: any, payload: any) => ({
   version: '1.0',
-  id: uuidv4(),
+  id: randomUUID(),
   timestamp: new Date().toISOString(),
   type,
   from,

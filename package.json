@@ -30,7 +30,7 @@
   "author": "MudVault Mesh Team",
   "license": "MIT",
   "dependencies": {
-    "bcrypt": "^5.1.1",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "discord.js": "^14.21.0",
     "dotenv": "^16.3.1",
@@ -40,7 +40,6 @@
     "jsonwebtoken": "^9.0.2",
     "rate-limiter-flexible": "^7.1.1",
     "redis": "^4.6.8",
-    "uuid": "^9.0.1",
     "winston": "^3.11.0",
     "ws": "^8.14.2"
   },
@@ -52,7 +51,6 @@
     "@types/jsonwebtoken": "^9.0.4",
     "@types/node": "^20.8.6",
     "@types/supertest": "^2.0.16",
-    "@types/uuid": "^9.0.6",
     "@types/ws": "^8.5.8",
     "@typescript-eslint/eslint-plugin": "^6.8.0",
     "@typescript-eslint/parser": "^6.8.0",
