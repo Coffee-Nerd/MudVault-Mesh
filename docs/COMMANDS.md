@@ -647,7 +647,7 @@ Before sending any commands, your MUD must authenticate with the gateway:
 
 **1. Connect to WebSocket**
 ```
-ws://ws.mesh.mudvault.org:8082
+wss://mesh.mudvault.org/ws
 ```
 
 **2. Send Authentication**

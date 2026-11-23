@@ -1,7 +1,7 @@
 # MudVault Mesh Protocol Specification v1.0
 
 > [!NOTE]
-> This specification mixes the current protocol with long-term goals. Today there is one gateway, traffic is not yet encrypted, and every WebSocket login needs a session token from `POST /api/v1/auth/login`.
+> This specification mixes the current protocol with long-term goals. Today there is one gateway. The hosted endpoints are `https://mesh.mudvault.org/api/v1` and `wss://mesh.mudvault.org/ws`, and every WebSocket login needs a session token from `POST /api/v1/auth/login`.
 > See the [README](../README.md#-project-status) for what works today.
 
 This document defines the MudVault Mesh (Modern Inter-MUD Communication) protocol, a modern replacement for legacy IMC protocols that enables seamless communication between MUD (Multi-User Dungeon) servers.
@@ -24,7 +24,7 @@ MudVault Mesh is designed with the following principles:
 
 - **Modern Standards**: Built on WebSocket, JSON, and HTTP/REST
 - **Language Agnostic**: Works with any programming language
-- **Authenticated**: Every connection logs in with a verified session token (TLS is planned)
+- **Secure Transport**: Hosted traffic uses TLS, and every connection logs in with a verified session token
 - **Extensible**: Plugin architecture for custom functionality
 - **Built to Federate**: Linked gateway nodes are the long-term goal (planned)
 - **Bridgeable**: Bridges to legacy IMC2/IMC3 protocols are a possible future addition

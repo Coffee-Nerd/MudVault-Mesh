@@ -72,8 +72,8 @@ Your MUD logs in once, opens a WebSocket, and stays connected. The gateway valid
 sequenceDiagram
     autonumber
     participant M as Your MUD
-    participant H as Gateway HTTP
-    participant W as Gateway WebSocket
+    participant H as HTTPS API
+    participant W as Secure WebSocket
     M->>H: POST /api/v1/auth/login (name + API key)
     H-->>M: Session token
     M->>W: WebSocket upgrade
@@ -113,12 +113,12 @@ Because that is where it is going. The goal is a network of **linked gateway nod
 | 🟢 | **Discord bridge** | Maps mesh channels to Discord channels |
 | 🟢 | **Authenticated sessions** | Admin-issued API keys, hashed with bcrypt, plus verified login tokens |
 | 🟢 | **Connection limits** | Login timeouts and per-IP and per-connection limits |
+| 🟢 | **TLS encryption** | Hosted traffic uses `https://` and `wss://` |
 | 🟢 | **Message validation** | Strict schemas and size limits on every message |
 | 🟡 | **Locate** | The message exists, but results are not yet player-accurate |
 | 🟡 | **Presence** | Defined in the protocol, not yet wired through clients |
-| 🟡 | **Client libraries** | Node.js and Python packages need updating for the login flow |
+| 🟡 | **Client libraries** | Node.js and Python are updated in this repo, with new releases to come |
 | 🟡 | **Automated tests** | Unit and gateway tests run in CI, with more coverage to come |
-| 🔵 | **TLS encryption** | See the [roadmap](#-roadmap) |
 | 🔵 | **MudVault accounts and bans** | See the [roadmap](#-roadmap) |
 | 🔵 | **Multi-gateway mesh** | See the [roadmap](#-roadmap) |
 
@@ -246,7 +246,7 @@ The reply contains your API key **once**, so save it somewhere private. With the
 | Core routing | 🟢 Running in production with Dark Wizardry |
 | Discord bridge | 🟢 Running |
 | Outside MUDs | 🟡 Private preview |
-| Encryption | 🔵 Not yet. Do not send passwords or sensitive data over the mesh |
+| Encryption | 🟢 TLS between MUDs and the gateway. Messages are not end-to-end encrypted |
 | Redundancy | 🔵 One gateway today |
 
 ## ➜ Roadmap
@@ -259,7 +259,7 @@ The reply contains your API key **once**, so save it somewhere private. With the
 - [x] Verify session tokens on every WebSocket login
 - [x] Add connection, login, and message limits
 - [x] Keep MUD server addresses private
-- [ ] Encrypt all traffic with TLS
+- [x] Encrypt all traffic with TLS
 - [ ] Add IP and account bans with an audit trail
 
 ### Phase 2: Open the network
@@ -268,7 +268,8 @@ The reply contains your API key **once**, so save it somewhere private. With the
 - [ ] Add external uptime checks with Discord alerts
 - [x] Repair CI
 - [ ] Build a shared protocol test suite
-- [ ] Release updated client libraries and a reference C client
+- [x] Update the Node.js and Python clients for verified logins
+- [ ] Publish the updated clients and a reference C client
 - [ ] Welcome the first outside MUDs
 
 ### Phase 3: Connect the MudVault ecosystem
