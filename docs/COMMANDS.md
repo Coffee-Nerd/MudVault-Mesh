@@ -1,5 +1,9 @@
 # MudVault Mesh Commands Reference
 
+> [!NOTE]
+> Message shapes below are current, but the gateway no longer reports MUD server addresses.
+> See the [README](../README.md#-project-status) for what works today.
+
 This document provides complete JSON message formats for all MudVault Mesh commands, including what to send and what responses to expect.
 
 ## Message Format Overview
@@ -285,7 +289,7 @@ To see actual players, request "who" from a specific MUD (each MUD controls its 
         "title": "",
         "level": "",
         "idle": 0,
-        "location": "86.38.203.37",  // Network location (server IP) - NOT game location for security
+        "location": "MudVault Mesh",
         "flags": ["mud", "system"],
         "realName": "Dark-Wizardry (Connected 3600s ago)"
       },
@@ -496,7 +500,6 @@ To see actual players, request "who" from a specific MUD (each MUD controls its 
     "muds": [
       {
         "name": "Dark-Wizardry",
-        "host": "86.38.203.37",
         "version": "1.0",
         "admin": "",
         "email": "",

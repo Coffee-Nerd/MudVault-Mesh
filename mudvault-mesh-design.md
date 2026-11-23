@@ -1,5 +1,9 @@
 # MudVault Mesh: Modern Inter-MUD Communication Protocol Design Document
 
+> [!NOTE]
+> This is the original long-term vision, not a description of the running system. Many items here are unbuilt, and some may never be built.
+> See the [README](README.md#-project-status) for what works today.
+
 ## Executive Summary
 
 MudVault Mesh is a next-generation inter-MUD communication protocol designed to surpass IMC3 in every aspect while maintaining backward compatibility where feasible. It leverages modern technologies, provides enhanced security, supports multiple transport mechanisms, and enables rich media sharing between MUD servers.

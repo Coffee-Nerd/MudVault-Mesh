@@ -1,5 +1,9 @@
 # MudVault Mesh API Reference
 
+> [!NOTE]
+> Registration is admin-only, and `/messages/send` and `/tell` now return `410`. Send messages over the WebSocket connection.
+> See the [README](../README.md#-project-status) for what works today.
+
 This document provides a comprehensive reference for the MudVault Mesh REST API and WebSocket interface.
 
 ## Table of Contents

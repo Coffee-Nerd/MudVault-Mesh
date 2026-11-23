@@ -331,7 +331,7 @@ If you need help:
 - Check the [main documentation](../docs/)
 - Visit our [Discord](https://discord.gg/r6kM56YrEV)
 - Email: asmodeusbrooding@gmail.com
-- GitHub issues: https://github.com/Coffee-Nerd/OpenIMC/issues
+- GitHub issues: https://github.com/Coffee-Nerd/MudVault-Mesh/issues
 
 ## Advanced Configuration
 

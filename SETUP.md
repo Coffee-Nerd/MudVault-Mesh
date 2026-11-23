@@ -1,5 +1,9 @@
 # MudVault Mesh Setup Guide
 
+> [!NOTE]
+> This older guide is being replaced. For local setup, follow the steps in the README.
+> See the [README](README.md#-project-status) for what works today.
+
 This guide covers setting up the complete MudVault ecosystem: the central network hub, connecting your MUD, and Discord integration.
 
 ## Architecture Overview

@@ -1,5 +1,9 @@
 # MudVault Mesh Integration Guide
 
+> [!NOTE]
+> These are early integration notes. Every WebSocket login must include a session token from `POST /api/v1/auth/login`.
+> See the [README](../README.md#-project-status) for what works today.
+
 This guide walks you through integrating MudVault Mesh with your MUD server, regardless of the programming language or MUD codebase you're using.
 
 ## Table of Contents
@@ -19,8 +23,8 @@ The easiest way to get started is with Docker:
 
 ```bash
 # Clone the repository
-git clone https://github.com/Coffee-Nerd/OpenIMC.git
-cd OpenIMC
+git clone https://github.com/Coffee-Nerd/MudVault-Mesh.git
+cd MudVault-Mesh
 
 # Start with Docker Compose
 docker-compose up -d

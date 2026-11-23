@@ -37,8 +37,8 @@ This project adheres to a Code of Conduct that we expect all contributors to fol
 1. **Fork the repository**
    ```bash
    # Fork on GitHub, then clone your fork
-   git clone https://github.com/YOUR_USERNAME/OpenIMC.git
-   cd OpenIMC
+   git clone https://github.com/YOUR_USERNAME/MudVault-Mesh.git
+   cd MudVault-Mesh
    ```
 
 2. **Install dependencies**
@@ -431,8 +431,8 @@ Report security vulnerabilities privately:
 ### Resources
 
 - **Documentation**: [docs/](docs/)
-- **Issues**: [GitHub Issues](https://github.com/your-org/OpenIMC/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/OpenIMC/discussions)
+- **Issues**: [GitHub Issues](https://github.com/Coffee-Nerd/MudVault-Mesh/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Coffee-Nerd/MudVault-Mesh/discussions)
 - **Discord**: [Community Discord](#)
 
 ### Asking Questions

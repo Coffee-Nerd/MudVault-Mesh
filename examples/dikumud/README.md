@@ -238,9 +238,9 @@ MudVault Mesh: Received tell from Jane@OtherMUD
 
 ## Support
 
-- **Documentation**: https://github.com/Coffee-Nerd/OpenIMC/docs
+- **Documentation**: https://github.com/Coffee-Nerd/MudVault-Mesh/tree/main/docs
 - **Discord**: https://discord.gg/r6kM56YrEV
-- **Issues**: https://github.com/Coffee-Nerd/OpenIMC/issues
+- **Issues**: https://github.com/Coffee-Nerd/MudVault-Mesh/issues
 - **Email**: asmodeusbrooding@gmail.com
 
 ## License

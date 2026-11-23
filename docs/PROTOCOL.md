@@ -1,5 +1,9 @@
 # MudVault Mesh Protocol Specification v1.0
 
+> [!NOTE]
+> This specification mixes the current protocol with long-term goals. Today there is one gateway, traffic is not yet encrypted, and every WebSocket login needs a session token from `POST /api/v1/auth/login`.
+> See the [README](../README.md#-project-status) for what works today.
+
 This document defines the MudVault Mesh (Modern Inter-MUD Communication) protocol, a modern replacement for legacy IMC protocols that enables seamless communication between MUD (Multi-User Dungeon) servers.
 
 ## Table of Contents
@@ -20,10 +24,10 @@ MudVault Mesh is designed with the following principles:
 
 - **Modern Standards**: Built on WebSocket, JSON, and HTTP/REST
 - **Language Agnostic**: Works with any programming language
-- **Secure by Default**: TLS encryption and authentication required
+- **Authenticated**: Every connection logs in with a verified session token (TLS is planned)
 - **Extensible**: Plugin architecture for custom functionality
-- **Decentralized**: P2P capability with no single point of failure
-- **Backward Compatible**: Bridges to legacy IMC2/IMC3 protocols
+- **Built to Federate**: Linked gateway nodes are the long-term goal (planned)
+- **Bridgeable**: Bridges to legacy IMC2/IMC3 protocols are a possible future addition
 
 ## Core Concepts
 
@@ -44,13 +48,14 @@ MudVault Mesh operates through gateway nodes that:
 - Handle authentication and rate limiting
 - Maintain connection state
 
-### Decentralized Network
+### Planned: Linked Gateways
 
-While individual gateways serve as connection points, the overall network is decentralized:
-- Gateways can communicate with each other
-- No single point of failure
-- Automatic failover and load balancing
-- DHT-based MUD discovery (future)
+Today the network runs on a single gateway. The long-term plan is for multiple gateways to:
+- Relay messages between each other over authenticated links
+- Share the MUD registry, sessions, and bans
+- Fail over automatically so no single node can take the network down
+
+MUDs remain clients in this design and never relay traffic.
 
 ## Message Format
 

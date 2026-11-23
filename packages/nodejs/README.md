@@ -269,5 +269,5 @@ MIT License - see LICENSE file for details.
 ## Support
 
 - **Discord**: [Join our community](https://discord.gg/r6kM56YrEV)
-- **GitHub**: [Report issues](https://github.com/Coffee-Nerd/OpenIMC/issues)
-- **Documentation**: [Full protocol docs](https://github.com/Coffee-Nerd/OpenIMC/docs)
+- **GitHub**: [Report issues](https://github.com/Coffee-Nerd/MudVault-Mesh/issues)
+- **Documentation**: [Full protocol docs](https://github.com/Coffee-Nerd/MudVault-Mesh/docs)
