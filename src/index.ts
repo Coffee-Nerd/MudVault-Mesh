@@ -10,6 +10,7 @@ import apiRoutes from './routes/api';
 import redisService from './services/redis';
 import userService from './services/user';
 import channelService from './services/channel';
+import banService from './services/bans';
 import logger from './utils/logger';
 
 const app = express();
@@ -83,9 +84,16 @@ app.use('*', (req, res) => {
 });
 
 // Global error handler
-app.use((error: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((error: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  // Malformed or oversized request bodies are the client's fault, not a server error.
+  const status = (error as { status?: number }).status;
+  if (status && status >= 400 && status < 500) {
+    res.status(status).json({ error: 'Bad request' });
+    return;
+  }
+
   logger.error('Unhandled error:', error);
-  
+
   res.status(500).json({
     error: 'Internal Server Error',
     message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong',
@@ -105,6 +113,7 @@ async function startServer() {
     // Initialize services
     logger.info('Initializing services...');
     await userService.initialize();
+    await banService.load();
     
     // Start WebSocket gateway
     logger.info(`Starting WebSocket gateway on port ${WS_PORT}...`);
@@ -113,6 +122,7 @@ async function startServer() {
       ? { mudName: process.env.DISCORD_MUD_NAME || 'DiscordBridge', token: crypto.randomBytes(32).toString('hex') }
       : undefined;
     const gateway = new Gateway(WS_PORT, bridgeClient);
+    app.locals.gateway = gateway;
 
     // Initialize Discord service if enabled
     let discordService: DiscordService | null = null;
@@ -127,9 +137,8 @@ async function startServer() {
         const channelId = process.env[envVar];
         if (channelId) {
           channelMappings[channel] = channelId;
-          console.log(`DEBUG: Mapped channel ${channel} -> Discord channel ${channelId}`);
         } else {
-          console.warn(`WARNING: No Discord channel ID found for ${channel} (looking for ${envVar})`);
+          logger.warn(`No Discord channel ID found for ${channel} (looking for ${envVar})`);
         }
       }
 
@@ -146,7 +155,7 @@ async function startServer() {
         rateLimitCommands: parseInt(process.env.DISCORD_RATE_LIMIT_COMMANDS || '5')
       };
 
-      discordService = new DiscordService(discordConfig, logger, `ws://localhost:${WS_PORT}`, bridgeClient?.token);
+      discordService = new DiscordService(discordConfig, logger, `ws://localhost:${WS_PORT}`, bridgeClient?.token, () => gateway.getMudInfo());
       await discordService.start();
     }
     
@@ -157,10 +166,6 @@ async function startServer() {
 
     gateway.on('mudDisconnected', ({ mudName, connectionId }) => {
       logger.info(`MUD disconnected: ${mudName} (${connectionId})`);
-    });
-
-    gateway.on('messageRouted', ({ message, fromConnection }) => {
-      logger.debug(`Message routed: ${message.type} from ${message.from.mud} to ${message.to.mud}`);
     });
 
     // Set up channel service event handlers
@@ -222,7 +227,7 @@ async function startServer() {
       process.exit(1);
     });
 
-    process.on('unhandledRejection', (reason, promise) => {
+    process.on('unhandledRejection', (reason) => {
       // One failed send (Discord, Redis) must not take the whole mesh down.
       logger.error('Unhandled rejection:', reason instanceof Error ? reason.stack : reason);
     });

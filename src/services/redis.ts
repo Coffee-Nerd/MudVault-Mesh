@@ -4,11 +4,14 @@ import logger from '../utils/logger';
 class RedisService {
   private client: RedisClientType;
   private connected: boolean = false;
+  private readyListeners: Array<() => void> = [];
 
   constructor() {
     this.client = createClient({
       url: process.env.REDIS_URL || 'redis://localhost:6379',
       password: process.env.REDIS_PASSWORD || undefined,
+      // Fail fast during an outage instead of queueing commands without limit.
+      disableOfflineQueue: true,
       socket: {
         reconnectStrategy: (retries) => Math.min(retries * 50, 1000)
       }
@@ -18,15 +21,30 @@ class RedisService {
       logger.error('Redis client error:', err);
     });
 
-    this.client.on('connect', () => {
+    this.client.on('ready', () => {
       logger.info('Connected to Redis');
       this.connected = true;
+      for (const listener of this.readyListeners) {
+        listener();
+      }
     });
 
-    this.client.on('disconnect', () => {
-      logger.warn('Disconnected from Redis');
+    const lost = () => {
+      if (this.connected) {
+        logger.warn('Disconnected from Redis');
+      }
       this.connected = false;
-    });
+    };
+    this.client.on('end', lost);
+    this.client.on('reconnecting', lost);
+  }
+
+  /** Runs now if connected, and again after every reconnect. */
+  onReady(listener: () => void): void {
+    this.readyListeners.push(listener);
+    if (this.connected) {
+      listener();
+    }
   }
 
   async connect(): Promise<void> {
@@ -97,6 +115,16 @@ class RedisService {
       await this.client.lPush(key, value);
     } catch (error) {
       logger.error(`Error pushing to list ${key}:`, error);
+      throw error;
+    }
+  }
+
+  /** Adds values in order, newest last, and trims the list in one round trip. */
+  async pushCapped(key: string, values: string[], cap: number): Promise<void> {
+    try {
+      await this.client.multi().lPush(key, values).lTrim(key, 0, cap - 1).exec();
+    } catch (error) {
+      logger.error(`Error pushing batch to list ${key}:`, error);
       throw error;
     }
   }

@@ -1,4 +1,4 @@
-import { RateLimiterRedis } from 'rate-limiter-flexible';
+import { RateLimiterMemory, RateLimiterRedis } from 'rate-limiter-flexible';
 import { Request, Response, NextFunction } from 'express';
 import { createClient } from 'redis';
 import logger from '../utils/logger';
@@ -9,7 +9,12 @@ const redisClient = createClient({
   password: process.env.REDIS_PASSWORD || undefined
 });
 
-redisClient.connect().catch(console.error);
+// Without this listener, any Redis error would crash the whole process.
+redisClient.on('error', (error) => logger.warn(`Rate limiter Redis error: ${error.message}`));
+redisClient.connect().catch((error) => logger.error('Rate limiter could not reach Redis:', error));
+
+// Keeps limits working in this process while Redis is away.
+const insurance = (points: number, duration: number) => new RateLimiterMemory({ points, duration });
 
 // Rate limiting configurations
 const rateLimiterConfigs = {
@@ -20,6 +25,7 @@ const rateLimiterConfigs = {
     points: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
     duration: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000') / 1000,
     blockDuration: 60,
+    insuranceLimiter: insurance(parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000') / 1000),
   }),
 
   // Per-MUD rate limiter
@@ -29,6 +35,7 @@ const rateLimiterConfigs = {
     points: 200, // More generous for authenticated MUDs
     duration: 60,
     blockDuration: 60,
+    insuranceLimiter: insurance(200, 60),
   }),
 
   // Authentication endpoint rate limiter
@@ -38,6 +45,7 @@ const rateLimiterConfigs = {
     points: 20, // More reasonable for auth attempts
     duration: 300, // 5 minutes
     blockDuration: 300, // 5 minutes block instead of 15
+    insuranceLimiter: insurance(20, 300),
   }),
 
   // WebSocket connection rate limiter

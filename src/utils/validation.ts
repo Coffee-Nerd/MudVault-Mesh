@@ -1,5 +1,6 @@
 import Joi from 'joi';
 import { MudVaultMessage, MessageType } from '../types';
+import { fastValidate } from './fastValidate';
 
 const messageEndpointSchema = Joi.object({
   mud: Joi.string().required(),
@@ -161,6 +162,15 @@ const messageSchema = Joi.object({
 });
 
 export function validateMessage(message: any): { error?: string; value?: MudVaultMessage } {
+  const fast = fastValidate(message);
+  if (fast) {
+    return { value: fast };
+  }
+  return validateMessageStrict(message);
+}
+
+/** The authoritative schema check. Exported so tests can compare the fast path to it. */
+export function validateMessageStrict(message: any): { error?: string; value?: MudVaultMessage } {
   const { error, value } = messageSchema.validate(message, { allowUnknown: false });
   
   if (error) {

@@ -1,43 +1,95 @@
 import crypto from 'crypto';
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import { MudVaultMessage, ConnectionInfo, MudInfo, ErrorCodes, WhoUser } from '../types';
+import { MudVaultMessage, ConnectionInfo, MudInfo, ErrorCodes, WhoUser, MessageType } from '../types';
 import { validateMessage, validateMudName, normalizeMudName } from '../utils/validation';
-import { createErrorMessage, createPongMessage, createMessage, isExpired } from '../utils/message';
+import { createErrorMessage, createPongMessage, createMessage } from '../utils/message';
 import logger from '../utils/logger';
 import redisService from './redis';
+import banService from './bans';
 import { authService } from '../middleware/auth';
 
 const MAX_CONNECTIONS = 500;
 const MAX_CONNECTIONS_PER_IP = 10;
 const MAX_CONNECT_ATTEMPTS_PER_MINUTE = 30;
 const MAX_MESSAGES_PER_MINUTE = 300;
+const MAX_PAYLOAD_BYTES = 64 * 1024;
+const MAX_PREAUTH_BYTES = 8 * 1024;
+const MAX_BUFFERED_BYTES = 1024 * 1024;
 const AUTH_TIMEOUT_MS = 10000;
+const PING_INTERVAL_MS = 30000;
+const IDLE_TIMEOUT_MS = 60000;
+const SWEEP_INTERVAL_MS = 1000;
+const HISTORY_FLUSH_MS = 250;
+const HISTORY_CAP = 1000;
+const HISTORY_KEY = 'message_history:channel';
+
 const CLOSE_AUTH_FAILED = 4401;
+const CLOSE_BANNED = 4403;
 const CLOSE_AUTH_TIMEOUT = 4408;
 const CLOSE_REPLACED = 4409;
 const CLOSE_TOO_MANY = 4429;
+
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+const BROADCASTABLE: ReadonlySet<MessageType> = new Set<MessageType>(['channel', 'locate', 'presence']);
+// These only ever come from the gateway, so a MUD must not be able to forge them.
+const NEVER_FORWARDED: ReadonlySet<MessageType> = new Set<MessageType>(['auth', 'error', 'pong', 'mudlist', 'channels']);
+
+const CHANNELS = [
+  { name: 'ooc', description: 'Out of Character chat', memberCount: 0, flags: ['public'] },
+  { name: 'chat', description: 'General chat channel', memberCount: 0, flags: ['public'] },
+  { name: 'gossip', description: 'Gossip and rumors', memberCount: 0, flags: ['public'] },
+  { name: 'newbie', description: 'Help for new players', memberCount: 0, flags: ['public'] },
+  { name: 'admin', description: 'Administrative channel', memberCount: 0, flags: ['private', 'admin'] }
+];
 
 export interface InternalClient {
   mudName: string;
   token: string;
 }
 
-export class Gateway extends EventEmitter {
-  private connections: Map<string, WebSocket> = new Map();
-  private connectionInfo: Map<string, ConnectionInfo> = new Map();
-  private mudInfo: Map<string, MudInfo> = new Map();
-  private server: WebSocket.Server;
-  private connectAttempts: Map<string, { start: number; count: number }> = new Map();
-  private messageWindows: Map<string, { start: number; count: number }> = new Map();
+interface Connection {
+  id: string;
+  ws: WebSocket;
+  host: string;
+  mudName: string;
+  authenticated: boolean;
+  connectedAt: number;
+  lastSeenAt: number;
+  nextPingAt: number;
+  authDeadline: number;
+  messageCount: number;
+  version: string;
+  tokens: number;
+  tokensAt: number;
+  limited: boolean;
+}
 
-  constructor(port: number, private internalClient?: InternalClient) {
+const payloadOf = (message: MudVaultMessage) => message.payload as any;
+
+export class Gateway extends EventEmitter {
+  private connections: Map<string, Connection> = new Map();
+  private byMud: Map<string, Connection> = new Map();
+  private perIp: Map<string, number> = new Map();
+  private connectAttempts: Map<string, { start: number; count: number }> = new Map();
+  private server: WebSocket.Server;
+  private sweepTimer: NodeJS.Timeout;
+  private nextConnectionId = 0;
+  private lastAttemptSweep = Date.now();
+  private historyBatch: string[] = [];
+  private historyTimer: NodeJS.Timeout | null = null;
+
+  constructor(
+    port: number,
+    private internalClient?: InternalClient,
+    private maxConnectAttemptsPerMinute: number = MAX_CONNECT_ATTEMPTS_PER_MINUTE
+  ) {
     super();
-    
-    this.server = new WebSocket.Server({ 
+
+    this.server = new WebSocket.Server({
       port,
       perMessageDeflate: false,
-      maxPayload: 64 * 1024
+      maxPayload: MAX_PAYLOAD_BYTES
     });
 
     this.server.on('connection', this.handleConnection.bind(this));
@@ -45,108 +97,111 @@ export class Gateway extends EventEmitter {
       logger.error('WebSocket server error:', error);
     });
 
+    // One timer for every socket, instead of two per socket.
+    this.sweepTimer = setInterval(() => this.sweep(Date.now()), SWEEP_INTERVAL_MS);
+    this.sweepTimer.unref();
+
+    redisService.onReady(() => this.syncRegistry());
+
     logger.info(`WebSocket gateway listening on port ${port}`);
   }
 
-  private handleConnection(ws: WebSocket, req: any): void {
-    const connectionId = this.generateConnectionId();
+  private syncRegistry(): void {
+    const names = Array.from(this.byMud.keys());
+    redisService.del('connected_muds')
+      .then(() => Promise.all(names.map(name => redisService.sadd('connected_muds', name))))
+      .catch(() => undefined);
+  }
+
+  private clientAddress(req: any): string {
     // Behind nginx the socket is loopback, and nginx sets X-Real-IP itself.
-    const socketAddress: string = req.socket.remoteAddress;
+    const socketAddress: string = req.socket.remoteAddress ?? 'unknown';
     const forwarded = req.headers['x-real-ip'];
-    const behindProxy = process.env.TRUST_PROXY === 'true' && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(socketAddress);
-    const remoteAddress: string = behindProxy && typeof forwarded === 'string' && forwarded ? forwarded : socketAddress;
-    if (!this.admitConnection(remoteAddress)) {
-      ws.close(CLOSE_TOO_MANY, 'Too many connections');
+    const behindProxy = process.env.TRUST_PROXY === 'true' && LOOPBACK.has(socketAddress);
+    return behindProxy && typeof forwarded === 'string' && forwarded ? forwarded : socketAddress;
+  }
+
+  private handleConnection(ws: WebSocket, req: any): void {
+    // Must be attached first. A bad frame on a socket with no listener kills the process.
+    ws.on('error', (error) => {
+      logger.debug(`WebSocket error: ${error.message}`);
+      ws.terminate();
+    });
+
+    const host = this.clientAddress(req);
+    if (banService.isIpBanned(host)) {
+      this.closeSoon(ws, CLOSE_BANNED, 'Banned');
       return;
     }
-    const userAgent = req.headers['user-agent'] || 'Unknown';
-    const origin = req.headers.origin || 'Unknown';
-    
-    logger.info(`🔗 NEW CONNECTION: ${connectionId}`, {
-      remoteAddress,
-      userAgent,
-      origin,
-      timestamp: new Date().toISOString(),
-      totalConnections: this.connections.size + 1,
-      headers: {
-        'user-agent': userAgent,
-        'origin': origin,
-        'sec-websocket-protocol': req.headers['sec-websocket-protocol'],
-        'sec-websocket-version': req.headers['sec-websocket-version']
-      }
-    });
-    
-    this.connections.set(connectionId, ws);
-    this.connectionInfo.set(connectionId, {
-      id: connectionId,
+    if (!this.admitConnection(host)) {
+      this.closeSoon(ws, CLOSE_TOO_MANY, 'Too many connections');
+      return;
+    }
+
+    const now = Date.now();
+    const connection: Connection = {
+      id: `c${++this.nextConnectionId}`,
+      ws,
+      host,
       mudName: '',
-      host: remoteAddress,
       authenticated: false,
-      connected: new Date(),
-      lastSeen: new Date(),
+      connectedAt: now,
+      lastSeenAt: now,
+      nextPingAt: now + PING_INTERVAL_MS,
+      authDeadline: now + AUTH_TIMEOUT_MS,
       messageCount: 0,
-      version: '1.0'
-    });
+      version: '1.0',
+      tokens: MAX_MESSAGES_PER_MINUTE,
+      tokensAt: now,
+      limited: false
+    };
+    this.connections.set(connection.id, connection);
+    this.perIp.set(host, (this.perIp.get(host) ?? 0) + 1);
 
-    const authTimer = setTimeout(() => {
-      if (!this.connectionInfo.get(connectionId)?.authenticated) {
-        this.closeSoon(ws, CLOSE_AUTH_TIMEOUT, 'Authentication timeout');
-      }
-    }, AUTH_TIMEOUT_MS);
-    ws.once('close', () => clearTimeout(authTimer));
-
-    ws.on('message', (data) => {
-      this.handleMessage(connectionId, data);
-    });
-
-    ws.on('close', (code, reason) => {
-      this.handleDisconnection(connectionId, code, reason);
-    });
-
-    ws.on('error', (error) => {
-      const connInfo = this.connectionInfo.get(connectionId);
-      logger.error(`❌ WEBSOCKET ERROR: ${connectionId}`, {
-        error: error.message,
-        mudName: connInfo?.mudName || 'Unknown',
-        authenticated: connInfo?.authenticated || false,
-        remoteAddress: connInfo?.host || 'Unknown',
-        messageCount: connInfo?.messageCount || 0,
-        connectionDuration: connInfo ? Date.now() - connInfo.connected.getTime() : 0
-      });
-    });
-
+    ws.on('message', (data) => this.handleMessage(connection, data));
+    ws.on('close', (code) => this.handleDisconnection(connection, code));
     ws.on('pong', () => {
-      this.updateLastSeen(connectionId);
+      connection.lastSeenAt = Date.now();
     });
-
-    this.startHeartbeat(connectionId);
   }
 
   private admitConnection(ip: string): boolean {
     const now = Date.now();
-    if (this.connectAttempts.size > 5000) {
-      for (const [key, entry] of this.connectAttempts) {
-        if (now - entry.start >= 60000) {
-          this.connectAttempts.delete(key);
-        }
-      }
-    }
     let attempts = this.connectAttempts.get(ip);
     if (!attempts || now - attempts.start >= 60000) {
       attempts = { start: now, count: 0 };
       this.connectAttempts.set(ip, attempts);
     }
     attempts.count++;
-    if (attempts.count > MAX_CONNECT_ATTEMPTS_PER_MINUTE || this.connections.size >= MAX_CONNECTIONS) {
-      return false;
-    }
-    let fromIp = 0;
-    for (const info of this.connectionInfo.values()) {
-      if (info.host === ip) {
-        fromIp++;
+    return attempts.count <= this.maxConnectAttemptsPerMinute &&
+      this.connections.size < MAX_CONNECTIONS &&
+      (this.perIp.get(ip) ?? 0) < MAX_CONNECTIONS_PER_IP;
+  }
+
+  private sweep(now: number): void {
+    for (const connection of this.connections.values()) {
+      const { ws } = connection;
+      if (ws.readyState !== WebSocket.OPEN) {
+        continue;
+      }
+      if (!connection.authenticated && now >= connection.authDeadline) {
+        this.closeSoon(ws, CLOSE_AUTH_TIMEOUT, 'Authentication timeout');
+      } else if (now - connection.lastSeenAt > IDLE_TIMEOUT_MS) {
+        logger.warn(`Connection ${connection.id} timed out`);
+        ws.terminate();
+      } else if (now >= connection.nextPingAt) {
+        connection.nextPingAt = now + PING_INTERVAL_MS;
+        ws.ping();
       }
     }
-    return fromIp < MAX_CONNECTIONS_PER_IP;
+    if (now - this.lastAttemptSweep >= 60000) {
+      this.lastAttemptSweep = now;
+      for (const [ip, entry] of this.connectAttempts) {
+        if (now - entry.start >= 60000) {
+          this.connectAttempts.delete(ip);
+        }
+      }
+    }
   }
 
   private closeSoon(ws: WebSocket, code: number, reason: string): void {
@@ -156,26 +211,27 @@ export class Gateway extends EventEmitter {
     setTimeout(() => ws.terminate(), 2000).unref();
   }
 
-  private rejectUnauthenticated(connectionId: string): void {
-    const ws = this.connections.get(connectionId);
-    const connection = this.connectionInfo.get(connectionId);
-    if (ws && connection && !connection.authenticated) {
-      this.closeSoon(ws, CLOSE_AUTH_FAILED, 'Authentication failed');
+  private rejectUnauthenticated(connection: Connection): void {
+    if (!connection.authenticated) {
+      this.closeSoon(connection.ws, CLOSE_AUTH_FAILED, 'Authentication failed');
     }
   }
 
-  private overMessageLimit(connectionId: string): boolean {
-    const now = Date.now();
-    let window = this.messageWindows.get(connectionId);
-    if (!window || now - window.start >= 60000) {
-      window = { start: now, count: 0 };
-      this.messageWindows.set(connectionId, window);
+  /** Token bucket: the same sustained rate as before, without a double burst at window edges. */
+  private overMessageLimit(connection: Connection, now: number): boolean {
+    const refill = (now - connection.tokensAt) * (MAX_MESSAGES_PER_MINUTE / 60000);
+    connection.tokens = Math.min(MAX_MESSAGES_PER_MINUTE, connection.tokens + refill);
+    connection.tokensAt = now;
+    if (connection.tokens >= 1) {
+      connection.tokens -= 1;
+      connection.limited = false;
+      return false;
     }
-    window.count++;
-    if (window.count === MAX_MESSAGES_PER_MINUTE + 1) {
-      this.sendError(connectionId, ErrorCodes.RATE_LIMITED, 'Too many messages. Slow down.');
+    if (!connection.limited) {
+      connection.limited = true;
+      this.sendError(connection, ErrorCodes.RATE_LIMITED, 'Too many messages. Slow down.');
     }
-    return window.count > MAX_MESSAGES_PER_MINUTE;
+    return true;
   }
 
   private tokenAllowed(token: unknown, finalMudName: string, host: string): boolean {
@@ -183,793 +239,390 @@ export class Gateway extends EventEmitter {
       return false;
     }
     const internal = this.internalClient;
-    if (internal && normalizeMudName(internal.mudName).toLowerCase() === finalMudName) {
-      const loopback = host === '127.0.0.1' || host === '::1' || host === '::ffff:127.0.0.1';
+    if (internal && normalizeMudName(internal.mudName) === finalMudName) {
       const a = crypto.createHash('sha256').update(token).digest();
       const b = crypto.createHash('sha256').update(internal.token).digest();
-      return loopback && crypto.timingSafeEqual(a, b);
+      return LOOPBACK.has(host) && crypto.timingSafeEqual(a, b);
     }
     const payload = authService.verifyJWT(token);
-    return !!payload && normalizeMudName(payload.mudName).toLowerCase() === finalMudName;
+    return !!payload && normalizeMudName(payload.mudName) === finalMudName;
   }
 
-  private async handleMessage(connectionId: string, data: WebSocket.Data): Promise<void> {
+  private handleMessage(connection: Connection, data: WebSocket.RawData): void {
     try {
-      const connection = this.connectionInfo.get(connectionId);
-      if (!connection) {
-        logger.warn(`📦 MESSAGE IGNORED: Connection ${connectionId} not found`);
-        return;
-      }
-
-      connection.lastSeen = new Date();
+      const now = Date.now();
+      connection.lastSeenAt = now;
       connection.messageCount++;
-      if (this.overMessageLimit(connectionId)) {
+      if (this.overMessageLimit(connection, now)) {
         return;
       }
 
-      const messageText = data.toString();
-      const messageSize = Buffer.byteLength(messageText, 'utf8');
-      
-      logger.debug(`📨 INCOMING MESSAGE: ${connectionId}`, {
-        mudName: connection.mudName || 'Unauthenticated',
-        authenticated: connection.authenticated,
-        messageSize,
-        messageCount: connection.messageCount,
-        rawLength: messageText.length,
-      });
+      const buffer = Buffer.isBuffer(data) ? data : Array.isArray(data) ? Buffer.concat(data) : Buffer.from(data);
+      if (!connection.authenticated && buffer.length > MAX_PREAUTH_BYTES) {
+        this.sendError(connection, ErrorCodes.MESSAGE_TOO_LARGE, 'Login message is too large');
+        this.rejectUnauthenticated(connection);
+        return;
+      }
 
-      let messageData: any;
-      
+      let parsed: unknown;
       try {
-        messageData = JSON.parse(messageText);
-      } catch (error) {
-        logger.error(`❌ JSON PARSE ERROR: ${connectionId}`, {
-          mudName: connection.mudName || 'Unauthenticated',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-        this.sendError(connectionId, ErrorCodes.INVALID_MESSAGE, 'Invalid JSON format');
-        this.rejectUnauthenticated(connectionId);
+        parsed = JSON.parse(buffer.toString('utf8'));
+      } catch {
+        this.sendError(connection, ErrorCodes.INVALID_MESSAGE, 'Invalid JSON format');
+        this.rejectUnauthenticated(connection);
         return;
       }
 
-      const validation = validateMessage(messageData);
-      if (validation.error) {
-        logger.error(`❌ VALIDATION ERROR: ${connectionId}`, {
-          mudName: connection.mudName || 'Unauthenticated',
-          error: validation.error,
-          messageType: messageData.type || 'Unknown',
-          messageId: messageData.id || 'No ID',
-          messageSize: messageText.length
-        });
-        this.sendError(connectionId, ErrorCodes.INVALID_MESSAGE, validation.error);
-        this.rejectUnauthenticated(connectionId);
+      const validation = validateMessage(parsed);
+      if (validation.error || !validation.value) {
+        this.sendError(connection, ErrorCodes.INVALID_MESSAGE, validation.error ?? 'Invalid message');
+        this.rejectUnauthenticated(connection);
         return;
       }
+      const message = validation.value;
 
-      const message = validation.value!;
-
-      logger.info(`✅ VALID MESSAGE: ${connectionId}`, {
-        mudName: connection.mudName || 'Unauthenticated',
-        messageType: message.type,
-        messageId: message.id,
-        from: `${message.from.user || 'No user'}@${message.from.mud}`,
-        to: message.to.user ? `${message.to.user}@${message.to.mud}` : `channel:${message.to.channel}` || message.to.mud,
-        priority: message.metadata.priority,
-        ttl: message.metadata.ttl
-      });
-
-      if (isExpired(message)) {
-        logger.warn(`⏰ EXPIRED MESSAGE: ${connectionId}`, {
-          messageId: message.id,
-          mudName: connection.mudName || 'Unauthenticated',
-          timestamp: message.timestamp,
-          age: Date.now() - new Date(message.timestamp).getTime()
-        });
+      if (now - Date.parse(message.timestamp) > message.metadata.ttl * 1000) {
+        this.sendError(connection, ErrorCodes.INVALID_MESSAGE, 'Message expired. Check that the server clock is correct.');
+        this.rejectUnauthenticated(connection);
         return;
       }
 
       if (message.type === 'auth') {
-        await this.handleAuthentication(connectionId, message);
-        return;
+        this.handleAuthentication(connection, message);
+      } else if (!connection.authenticated) {
+        this.sendError(connection, ErrorCodes.UNAUTHORIZED, 'Authentication required');
+        this.rejectUnauthenticated(connection);
+      } else if (message.type === 'ping') {
+        this.send(connection, createPongMessage({ mud: 'Gateway' }, { mud: connection.mudName }, payloadOf(message).timestamp));
+      } else {
+        this.routeMessage(connection, message);
       }
-
-      if (!connection.authenticated) {
-        this.sendError(connectionId, ErrorCodes.UNAUTHORIZED, 'Authentication required');
-        this.rejectUnauthenticated(connectionId);
-        return;
-      }
-
-      if (message.type === 'ping') {
-        await this.handlePing(connectionId, message);
-        return;
-      }
-
-      await this.routeMessage(connectionId, message);
-
     } catch (error) {
-      logger.error(`Error handling message from ${connectionId}:`, error);
-      this.sendError(connectionId, ErrorCodes.INTERNAL_ERROR, 'Internal server error');
+      logger.error(`Error handling message from ${connection.id}:`, error);
+      this.sendError(connection, ErrorCodes.INTERNAL_ERROR, 'Internal server error');
     }
   }
 
-  private async handleAuthentication(connectionId: string, message: MudVaultMessage): Promise<void> {
-    const connection = this.connectionInfo.get(connectionId);
-    if (!connection) {
-      logger.warn(`🔐 AUTH ATTEMPT: Connection ${connectionId} not found`);
-      return;
-    }
-
+  private handleAuthentication(connection: Connection, message: MudVaultMessage): void {
     if (connection.authenticated) {
-      this.sendError(connectionId, ErrorCodes.PROTOCOL_ERROR, 'Already authenticated');
+      this.sendError(connection, ErrorCodes.PROTOCOL_ERROR, 'Already authenticated');
       return;
     }
 
-    const { mudName, token } = message.payload as any;
-    
-    logger.info(`🔐 AUTHENTICATION ATTEMPT: ${connectionId}`, {
-      attemptedMudName: mudName,
-      remoteAddress: connection.host,
-      messageId: message.id,
-      timestamp: message.timestamp,
-      connectionDuration: `${Math.round((Date.now() - connection.connected.getTime()) / 1000)}s`
-    });
-
+    const { mudName, token } = payloadOf(message);
     if (!mudName || typeof mudName !== 'string') {
-      logger.error(`❌ AUTH FAILED - Missing MUD name: ${connectionId}`, {
-        remoteAddress: connection.host,
-        providedMudName: mudName,
-        mudNameType: typeof mudName
-      });
-      this.sendError(connectionId, ErrorCodes.AUTHENTICATION_FAILED, 'Missing mud name');
-      this.rejectUnauthenticated(connectionId);
+      this.sendError(connection, ErrorCodes.AUTHENTICATION_FAILED, 'Missing mud name');
+      this.rejectUnauthenticated(connection);
       return;
     }
 
-    // Reject MUD names with spaces or invalid characters
     if (!validateMudName(mudName)) {
       const suggestedName = normalizeMudName(mudName);
-      logger.error(`❌ AUTH FAILED - Invalid MUD name: ${connectionId}`, {
-        providedName: mudName,
-        suggestedName: suggestedName,
-        remoteAddress: connection.host,
-        reason: 'MUD names cannot contain spaces or special characters'
-      });
-      
-      this.sendError(connectionId, ErrorCodes.AUTHENTICATION_FAILED, 
-        `Invalid MUD name "${mudName}". MUD names can only contain letters, numbers, dashes, and underscores (no spaces). Suggested name: "${suggestedName}". This ensures proper parsing of intermud commands like: tell user@${suggestedName} message`);
-      this.rejectUnauthenticated(connectionId);
+      this.sendError(connection, ErrorCodes.AUTHENTICATION_FAILED,
+        `Invalid MUD name. MUD names can only contain letters, numbers, dashes, and underscores (no spaces). Suggested name: "${suggestedName}".`);
+      this.rejectUnauthenticated(connection);
       return;
     }
 
-    // Normalize mudName for case-insensitive matching
-    const finalMudName = normalizeMudName(mudName).toLowerCase();
-
+    const finalMudName = normalizeMudName(mudName);
     if (!this.tokenAllowed(token, finalMudName, connection.host)) {
-      logger.warn(`AUTH FAILED - bad token: ${connectionId}`, { attemptedMudName: finalMudName, remoteAddress: connection.host });
-      this.sendError(connectionId, ErrorCodes.AUTHENTICATION_FAILED, 'Invalid or expired token. Log in again.');
-      this.rejectUnauthenticated(connectionId);
+      logger.warn(`Login refused: ${finalMudName}`, { connection: connection.id });
+      this.sendError(connection, ErrorCodes.AUTHENTICATION_FAILED, 'Invalid or expired token. Log in again.');
+      this.rejectUnauthenticated(connection);
       return;
     }
 
-    // Check if MUD name is already connected
-    const existingMud = Array.from(this.connectionInfo.values()).find(
-      conn => conn.authenticated && normalizeMudName(conn.mudName).toLowerCase() === finalMudName && conn.id !== connectionId
-    );
+    if (banService.isMudBanned(finalMudName)) {
+      this.sendError(connection, ErrorCodes.AUTHENTICATION_FAILED, 'This MUD is banned from the mesh.');
+      this.closeSoon(connection.ws, CLOSE_BANNED, 'Banned');
+      return;
+    }
 
-    if (existingMud) {
-      logger.warn(`⚠️ MUD ALREADY CONNECTED: ${finalMudName}`, {
-        newConnectionId: connectionId,
-        existingConnectionId: existingMud.id,
-        newRemoteAddress: connection.host,
-        existingRemoteAddress: existingMud.host
-      });
-      // The token proved ownership, so the newest connection wins.
-      existingMud.authenticated = false;
-      const previous = this.connections.get(existingMud.id);
-      if (previous) {
-        this.closeSoon(previous, CLOSE_REPLACED, 'Replaced by a newer connection');
-      }
+    // The token proved ownership, so the newest connection wins.
+    const previous = this.byMud.get(finalMudName);
+    if (previous && previous !== connection) {
+      previous.authenticated = false;
+      this.closeSoon(previous.ws, CLOSE_REPLACED, 'Replaced by a newer connection');
     }
 
     connection.mudName = finalMudName;
     connection.authenticated = true;
+    connection.version = message.version;
+    this.byMud.set(finalMudName, connection);
 
-    const mudInfo = {
-      name: finalMudName,
-      host: connection.host,
-      version: message.version,
-      admin: '',
-      email: '',
-      time: new Date().toISOString(),
-      uptime: 0,
-      users: 0
-    };
+    if (redisService.isConnected()) {
+      redisService.sadd('connected_muds', finalMudName).catch(() => undefined);
+    }
 
-    this.mudInfo.set(finalMudName, mudInfo);
+    logger.info(`MUD authenticated: ${finalMudName}`, { connection: connection.id, muds: this.byMud.size });
 
-    await redisService.sadd('connected_muds', finalMudName);
-    await redisService.set(`mud_info:${finalMudName}`, JSON.stringify(mudInfo), 3600);
-
-    logger.info(`✅ MUD AUTHENTICATED: ${finalMudName}`, {
-      connectionId,
-      remoteAddress: connection.host,
-      version: message.version,
-      messageId: message.id,
-      totalConnectedMuds: this.mudInfo.size,
-      authenticationTime: `${Math.round((Date.now() - connection.connected.getTime()) / 1000)}s`
-    });
-
-    // Send authentication success response
-    const authSuccessMessage = createMessage(
+    this.send(connection, createMessage(
       'auth',
       { mud: 'Gateway' },
       { mud: finalMudName },
-      {
-        mudName: finalMudName,
-        response: 'Authentication successful'
-      },
+      { mudName: finalMudName, response: 'Authentication successful' },
       { priority: 10 }
-    );
+    ));
 
-    await this.sendMessage(connectionId, authSuccessMessage);
-    
-    this.emit('mudConnected', { mudName: finalMudName, connectionId });
+    this.emit('mudConnected', { mudName: finalMudName, connectionId: connection.id });
   }
 
-  private async handlePing(connectionId: string, message: MudVaultMessage): Promise<void> {
-    const connection = this.connectionInfo.get(connectionId);
-    if (!connection) {
-      return;
-    }
-
-    logger.info(`🏓 PING REQUEST: ${connectionId}`, {
-      mudName: connection.mudName,
-      timestamp: (message.payload as any).timestamp,
-      messageId: message.id
-    });
-
-    const pongMessage = createPongMessage(
-      { mud: 'Gateway' },
-      { mud: connection.mudName },
-      (message.payload as any).timestamp
-    );
-
-    await this.sendMessage(connectionId, pongMessage);
-  }
-
-  private async routeMessage(connectionId: string, message: MudVaultMessage): Promise<void> {
-    const connection = this.connectionInfo.get(connectionId);
-    if (!connection) {
-      logger.warn(`📤 ROUTING FAILED: Connection ${connectionId} not found`);
-      return;
-    }
-
+  private routeMessage(connection: Connection, message: MudVaultMessage): void {
     message.from.mud = connection.mudName;
+    if (message.type === 'channel') {
+      // Clients read either field, so they must never disagree.
+      message.to.channel = payloadOf(message).channel;
+    }
 
-    logger.info(`📤 ROUTING MESSAGE: ${message.id}`, {
-      from: `${message.from.user || 'System'}@${message.from.mud}`,
-      to: message.to.user ? `${message.to.user}@${message.to.mud}` : `${message.to.channel ? `#${message.to.channel}` : message.to.mud}`,
-      type: message.type,
-      priority: message.metadata.priority,
-      routingMode: message.to.mud === '*' ? 'BROADCAST' : message.to.mud === 'Gateway' ? 'GATEWAY' : 'FORWARD',
-      messageSize: JSON.stringify(message).length
-    });
-
-    try {
-      if (message.to.mud === '*') {
-        await this.broadcastMessage(message, connectionId);
-      } else if (message.to.mud === 'Gateway') {
-        await this.handleGatewayMessage(connectionId, message);
-      } else {
-        await this.forwardMessage(message, connectionId);
+    const target = message.to.mud;
+    if (target === '*') {
+      if (!BROADCASTABLE.has(message.type)) {
+        this.sendError(connection, ErrorCodes.PROTOCOL_ERROR, `${message.type} cannot be broadcast`);
+        return;
       }
-
-      await this.storeMessage(message);
-      this.emit('messageRouted', { message, fromConnection: connectionId });
-      
-      logger.debug(`✅ MESSAGE ROUTED SUCCESSFULLY: ${message.id}`);
-    } catch (error) {
-      logger.error(`❌ MESSAGE ROUTING FAILED: ${message.id}`, {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        messageType: message.type,
-        from: message.from.mud,
-        to: message.to.mud
-      });
+      this.broadcast(connection, message);
+    } else if (target === 'Gateway' || target.toLowerCase() === 'gateway') {
+      this.handleGatewayMessage(connection, message);
+    } else {
+      if (NEVER_FORWARDED.has(message.type)) {
+        this.sendError(connection, ErrorCodes.PROTOCOL_ERROR, `${message.type} cannot be sent to a MUD`);
+        return;
+      }
+      const destination = this.byMud.get(target) ?? this.byMud.get(normalizeMudName(target));
+      if (!destination) {
+        this.sendError(connection, ErrorCodes.MUD_NOT_FOUND, `MUD ${target} not found`);
+        return;
+      }
+      this.send(destination, message);
     }
   }
 
-  private async broadcastMessage(message: MudVaultMessage, excludeConnection?: string): Promise<void> {
-    const promises: Promise<void>[] = [];
-    const targetMuds: string[] = [];
-    
-    for (const [connId, ws] of this.connections) {
-      if (connId !== excludeConnection && ws.readyState === WebSocket.OPEN) {
-        const connection = this.connectionInfo.get(connId);
-        if (connection?.authenticated) {
-          promises.push(this.sendMessage(connId, message));
-          targetMuds.push(connection.mudName);
-        }
+  private broadcast(sender: Connection, message: MudVaultMessage): void {
+    // Serialize once and share one buffer between every recipient.
+    const text = JSON.stringify(message);
+    const frame = Buffer.from(text);
+    for (const connection of this.byMud.values()) {
+      if (connection !== sender) {
+        this.sendFrame(connection, frame);
       }
     }
-
-    logger.info(`📡 BROADCASTING MESSAGE: ${message.id}`, {
-      from: `${message.from.user || 'System'}@${message.from.mud}`,
-      type: message.type,
-      targetCount: targetMuds.length,
-      targetMuds: targetMuds.join(', '),
-      excludedConnection: excludeConnection || 'None'
-    });
-
-    await Promise.all(promises);
+    if (message.type === 'channel' && payloadOf(message).action === 'message') {
+      this.queueHistory(text);
+    }
   }
 
-  private async forwardMessage(message: MudVaultMessage, fromConnection: string): Promise<void> {
-    const targetMud = message.to.mud;
-    const targetConnection = this.findConnectionByMud(targetMud);
+  private queueHistory(text: string): void {
+    this.historyBatch.push(text);
+    if (this.historyBatch.length > HISTORY_CAP) {
+      this.historyBatch.shift();
+    }
+    if (!this.historyTimer) {
+      this.historyTimer = setTimeout(() => this.flushHistory(), HISTORY_FLUSH_MS);
+      this.historyTimer.unref();
+    }
+  }
 
-    if (!targetConnection) {
-      logger.warn(`❌ FORWARD FAILED - Target MUD not found: ${message.id}`, {
-        from: `${message.from.user || 'System'}@${message.from.mud}`,
-        targetMud,
-        type: message.type,
-        availableMuds: Array.from(this.mudInfo.keys()).join(', ') || 'None'
-      });
-      this.sendError(fromConnection, ErrorCodes.MUD_NOT_FOUND, `MUD ${targetMud} not found`);
+  private flushHistory(): Promise<void> {
+    if (this.historyTimer) {
+      clearTimeout(this.historyTimer);
+      this.historyTimer = null;
+    }
+    const batch = this.historyBatch;
+    if (batch.length === 0 || !redisService.isConnected()) {
+      this.historyBatch = [];
+      return Promise.resolve();
+    }
+    this.historyBatch = [];
+    return redisService.pushCapped(HISTORY_KEY, batch, HISTORY_CAP).catch(() => undefined);
+  }
+
+  private handleGatewayMessage(connection: Connection, message: MudVaultMessage): void {
+    if (!payloadOf(message).request) {
       return;
     }
-
-    const targetInfo = this.connectionInfo.get(targetConnection);
-    logger.info(`➡️ FORWARDING MESSAGE: ${message.id}`, {
-      from: `${message.from.user || 'System'}@${message.from.mud}`,
-      to: message.to.user ? `${message.to.user}@${targetMud}` : targetMud,
-      type: message.type,
-      targetConnection,
-      targetRemoteAddress: targetInfo?.host || 'Unknown'
-    });
-
-    await this.sendMessage(targetConnection, message);
-  }
-
-  private async handleGatewayMessage(connectionId: string, message: MudVaultMessage): Promise<void> {
     switch (message.type) {
       case 'who':
-        if ((message.payload as any).request) {
-          await this.handleWhoRequest(connectionId, message);
-        }
+        this.handleWhoRequest(connection, message);
         break;
-        
       case 'locate':
-        if ((message.payload as any).request) {
-          await this.handleLocateRequest(connectionId, message);
-        }
+        this.reply(connection, message, { user: payloadOf(message).user, request: false, locations: [] });
         break;
-
       case 'mudlist':
-        if ((message.payload as any).request) {
-          await this.handleMudListRequest(connectionId, message);
-        }
+        this.reply(connection, message, { muds: this.listMuds(), request: false });
         break;
-
       case 'channels':
-        if ((message.payload as any).request) {
-          await this.handleChannelsRequest(connectionId, message);
-        }
+        this.reply(connection, message, { channels: CHANNELS, request: false });
         break;
-
-      case 'finger':
-        if ((message.payload as any).request) {
-          await this.handleFingerRequest(connectionId, message);
-        }
+      case 'finger': {
+        const { user } = payloadOf(message);
+        this.reply(connection, message, {
+          user,
+          request: false,
+          info: {
+            username: user,
+            realName: 'MudVault Mesh Gateway User',
+            email: 'noreply@mudvault.org',
+            lastLogin: new Date().toISOString(),
+            plan: 'Connected to MudVault Mesh inter-MUD communication network',
+            level: 'System',
+            location: 'Gateway Server',
+            idle: 0
+          }
+        });
         break;
-        
+      }
       default:
-        this.sendError(connectionId, ErrorCodes.PROTOCOL_ERROR, `Unsupported gateway message type: ${message.type}`);
+        this.sendError(connection, ErrorCodes.PROTOCOL_ERROR, `Unsupported gateway message type: ${message.type}`);
     }
   }
 
-  private async handleWhoRequest(connectionId: string, message: MudVaultMessage): Promise<void> {
-    const payload = message.payload as any;
-    
-    logger.info(`🔍 WHO REQUEST: ${connectionId}`, {
-      mudName: message.from.mud,
-      requestParameters: {
-        sort: payload.sort || 'none',
-        format: payload.format || 'long',
-        filter: payload.filter || 'none'
-      }
-    });
+  private reply(connection: Connection, message: MudVaultMessage, payload: unknown): void {
+    this.send(connection, createMessage(
+      message.type,
+      { mud: 'Gateway' },
+      { mud: connection.mudName },
+      payload as any,
+      { priority: message.metadata.priority }
+    ));
+  }
 
-    // For gateway who requests, we show connected MUDs as "users"
-    const connectedMuds = await redisService.smembers('connected_muds');
-    const mudUsers: WhoUser[] = [];
-
-    for (const mudName of connectedMuds) {
-      // Normalize for lookup
-      const normalizedMudName = normalizeMudName(mudName).toLowerCase();
-      const connection = Array.from(this.connectionInfo.values())
-        .find(conn => conn.authenticated && normalizeMudName(conn.mudName).toLowerCase() === normalizedMudName);
-      
-      if (connection) {
-        const idleSeconds = Math.floor((Date.now() - connection.lastSeen.getTime()) / 1000);
-        const uptimeSeconds = Math.floor((Date.now() - connection.connected.getTime()) / 1000);
-        
-        mudUsers.push({
-          username: mudName,
-          displayName: mudName,
-          title: 'MUD Server',
-          level: 'System',
-          idle: idleSeconds,
-          location: 'MudVault Mesh',
-          flags: ['mud', 'system'],
-          realName: `${mudName} (Connected ${uptimeSeconds}s ago)`
-        });
-      }
-    }
-
-    // Apply sorting if requested
-    if (payload.sort) {
-      mudUsers.sort((a, b) => {
-        switch (payload.sort) {
-          case 'alpha':
-            return a.username.localeCompare(b.username);
-          case 'idle':
-            return a.idle - b.idle;
-          case 'level':
-            return (a.level || '').localeCompare(b.level || '');
-          case 'random':
-            return Math.random() - 0.5;
-          default:
-            return 0;
-        }
+  private handleWhoRequest(connection: Connection, message: MudVaultMessage): void {
+    const now = Date.now();
+    const users: WhoUser[] = [];
+    for (const [name, mud] of this.byMud) {
+      users.push({
+        username: name,
+        displayName: name,
+        title: 'MUD Server',
+        level: 'System',
+        idle: Math.floor((now - mud.lastSeenAt) / 1000),
+        location: 'MudVault Mesh',
+        flags: ['mud', 'system'],
+        realName: `${name} (Connected ${Math.floor((now - mud.connectedAt) / 1000)}s ago)`
       });
     }
 
-    const whoResponse = createMessage(
-      'who',
-      { mud: 'Gateway' },
-      { mud: message.from.mud },
-      { 
-        users: mudUsers,
-        request: false // This is a response, not a request
-      },
-      { priority: message.metadata.priority }
-    );
-
-    logger.info(`📊 WHO RESPONSE: ${connectionId}`, {
-      mudName: message.from.mud,
-      userCount: mudUsers.length,
-      responseSize: JSON.stringify(whoResponse).length
-    });
-
-    await this.sendMessage(connectionId, whoResponse);
-  }
-
-  private async handleFingerRequest(connectionId: string, message: MudVaultMessage): Promise<void> {
-    const { user } = message.payload as any;
-    
-    logger.info(`👤 FINGER REQUEST: ${connectionId}`, {
-      mudName: message.from.mud,
-      targetUser: user,
-      messageId: message.id
-    });
-    
-    // For gateway finger requests, provide basic system info
-    const fingerResponse = createMessage(
-      'finger',
-      { mud: 'Gateway' },
-      { mud: message.from.mud },
-      {
-        user,
-        request: false,
-        info: {
-          username: user,
-          realName: 'MudVault Mesh Gateway User',
-          email: 'noreply@mudvault.org',
-          lastLogin: new Date().toISOString(),
-          plan: 'Connected to MudVault Mesh inter-MUD communication network',
-          level: 'System',
-          location: 'Gateway Server',
-          idle: 0
+    switch (payloadOf(message).sort) {
+      case 'alpha':
+      case 'level':
+        users.sort((a, b) => (a.username < b.username ? -1 : a.username > b.username ? 1 : 0));
+        break;
+      case 'idle':
+        users.sort((a, b) => a.idle - b.idle);
+        break;
+      case 'random':
+        for (let i = users.length - 1; i > 0; i--) {
+          const j = crypto.randomInt(i + 1);
+          [users[i], users[j]] = [users[j], users[i]];
         }
-      },
-      { priority: message.metadata.priority }
-    );
-
-    await this.sendMessage(connectionId, fingerResponse);
-  }
-
-  private async handleLocateRequest(connectionId: string, message: MudVaultMessage): Promise<void> {
-    const { user } = message.payload as any;
-    const locations: any[] = [];
-    
-    logger.info(`🔍 LOCATE REQUEST: ${connectionId}`, {
-      mudName: message.from.mud,
-      targetUser: user,
-      messageId: message.id
-    });
-    
-    // Search through all connected MUDs for the user
-    for (const [, connection] of this.connectionInfo) {
-      if (connection.authenticated) {
-        locations.push({
-          mud: connection.mudName,
-          online: true,
-          room: 'Connected to Gateway',
-          area: 'MudVault Mesh'
-        });
-      }
+        break;
     }
 
-    const locateResponse = createMessage(
-      'locate',
-      { mud: 'Gateway' },
-      { mud: message.from.mud },
-      {
-        user,
-        request: false,
-        locations
-      },
-      { priority: message.metadata.priority }
-    );
-
-    await this.sendMessage(connectionId, locateResponse);
+    this.reply(connection, message, { users, request: false });
   }
 
-  private async handleMudListRequest(connectionId: string, message: MudVaultMessage): Promise<void> {
-    logger.info(`📋 MUDLIST REQUEST: ${connectionId}`, {
-      mudName: message.from.mud,
-      messageId: message.id
-    });
-
-    const connectedMuds = await redisService.smembers('connected_muds');
-    const mudList = [];
-
-    for (const mudName of connectedMuds) {
-      const connection = Array.from(this.connectionInfo.values())
-        .find(conn => conn.authenticated && normalizeMudName(conn.mudName).toLowerCase() === normalizeMudName(mudName).toLowerCase());
-      
-      if (connection) {
-        const uptimeSeconds = Math.floor((Date.now() - connection.connected.getTime()) / 1000);
-        
-        mudList.push({
-          name: mudName,
-          version: connection.version,
-          admin: '', // Could be populated from MUD info
-          email: '', // Could be populated from MUD info
-          uptime: uptimeSeconds,
-          users: 0, // Could be populated from who queries
-          description: `${mudName} MUD Server`
-        });
-      }
-    }
-
-    const response = createMessage(
-      'mudlist',
-      { mud: 'Gateway' },
-      { mud: message.from.mud },
-      { 
-        muds: mudList,
-        request: false
-      },
-      { priority: message.metadata.priority }
-    );
-
-    logger.info(`📋 MUDLIST RESPONSE: ${connectionId}`, {
-      mudName: message.from.mud,
-      mudCount: mudList.length,
-      muds: mudList.map(m => m.name).join(', ')
-    });
-
-    await this.sendMessage(connectionId, response);
+  private send(connection: Connection, message: MudVaultMessage): void {
+    this.sendFrame(connection, Buffer.from(JSON.stringify(message)));
   }
 
-  private async handleChannelsRequest(connectionId: string, message: MudVaultMessage): Promise<void> {
-    logger.info(`📺 CHANNELS REQUEST: ${connectionId}`, {
-      mudName: message.from.mud,
-      messageId: message.id
-    });
-
-    // For now, return hardcoded channels - could be made dynamic later
-    const channels = [
-      { name: 'ooc', description: 'Out of Character chat', memberCount: 0, flags: ['public'] },
-      { name: 'chat', description: 'General chat channel', memberCount: 0, flags: ['public'] },
-      { name: 'gossip', description: 'Gossip and rumors', memberCount: 0, flags: ['public'] },
-      { name: 'newbie', description: 'Help for new players', memberCount: 0, flags: ['public'] },
-      { name: 'admin', description: 'Administrative channel', memberCount: 0, flags: ['private', 'admin'] }
-    ];
-
-    const response = createMessage(
-      'channels',
-      { mud: 'Gateway' },
-      { mud: message.from.mud },
-      { 
-        channels: channels,
-        request: false
-      },
-      { priority: message.metadata.priority }
-    );
-
-    logger.info(`📺 CHANNELS RESPONSE: ${connectionId}`, {
-      mudName: message.from.mud,
-      channelCount: channels.length,
-      channels: channels.map(c => c.name).join(', ')
-    });
-
-    await this.sendMessage(connectionId, response);
-  }
-
-  private findConnectionByMud(mudName: string): string | null {
-    const normalizedTarget = normalizeMudName(mudName).toLowerCase();
-    for (const [connId, info] of this.connectionInfo) {
-      if (normalizeMudName(info.mudName).toLowerCase() === normalizedTarget && info.authenticated) {
-        return connId;
-      }
-    }
-    return null;
-  }
-
-  private async sendMessage(connectionId: string, message: MudVaultMessage): Promise<void> {
-    const ws = this.connections.get(connectionId);
-    const connection = this.connectionInfo.get(connectionId);
-    
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      logger.warn(`⚠️ CANNOT SEND - Connection not ready: ${connectionId}`, {
-        hasWebSocket: !!ws,
-        readyState: ws?.readyState,
-        mudName: connection?.mudName || 'Unknown'
-      });
+  private sendFrame(connection: Connection, frame: Buffer): void {
+    const { ws } = connection;
+    if (ws.readyState !== WebSocket.OPEN) {
       return;
     }
-
-    try {
-      const messageJson = JSON.stringify(message);
-      const messageSize = Buffer.byteLength(messageJson, 'utf8');
-      
-      logger.debug(`📤 OUTGOING MESSAGE: ${connectionId}`, {
-        mudName: connection?.mudName || 'Unknown',
-        messageType: message.type,
-        messageId: message.id,
-        messageSize,
-        to: message.to.user ? `${message.to.user}@${message.to.mud}` : message.to.mud,
-        isError: message.type === 'error'
-      });
-
-      ws.send(messageJson);
-    } catch (error) {
-      logger.error(`❌ SEND ERROR: ${connectionId}`, {
-        mudName: connection?.mudName || 'Unknown',
-        messageType: message.type,
-        messageId: message.id,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  }
-
-  private sendError(connectionId: string, code: ErrorCodes, message: string): void {
-    const connection = this.connectionInfo.get(connectionId);
-    if (!connection) {
-      logger.warn(`⚠️ CANNOT SEND ERROR - Connection not found: ${connectionId}`);
+    // A client that stops reading must not be able to grow our memory without limit.
+    if (ws.bufferedAmount > MAX_BUFFERED_BYTES) {
+      logger.warn(`Dropping slow connection ${connection.id}`, { mudName: connection.mudName });
+      ws.terminate();
       return;
     }
+    ws.send(frame, { binary: false });
+  }
 
-    logger.warn(`🚨 SENDING ERROR: ${connectionId}`, {
-      mudName: connection.mudName || 'Unauthenticated',
-      errorCode: code,
-      errorMessage: message,
-      remoteAddress: connection.host
-    });
-
-    const errorMessage = createErrorMessage(
+  private sendError(connection: Connection, code: ErrorCodes, message: string): void {
+    this.send(connection, createErrorMessage(
       { mud: 'Gateway' },
       { mud: connection.mudName || 'Unknown' },
       code,
       message
-    );
-
-    this.sendMessage(connectionId, errorMessage);
+    ));
   }
 
-  private async storeMessage(message: MudVaultMessage): Promise<void> {
-    // Private traffic is routed, never persisted.
-    if (message.type !== 'channel') {
-      return;
+  private handleDisconnection(connection: Connection, code: number): void {
+    this.connections.delete(connection.id);
+    const fromIp = (this.perIp.get(connection.host) ?? 1) - 1;
+    if (fromIp > 0) {
+      this.perIp.set(connection.host, fromIp);
+    } else {
+      this.perIp.delete(connection.host);
     }
-    try {
-      const key = `message_history:${message.type}`;
-      await redisService.lpush(key, JSON.stringify(message));
-      await redisService.ltrim(key, 0, 999); // Keep last 1000 messages
-    } catch (error) {
-      logger.error('Error storing message:', error);
+
+    if (connection.mudName && this.byMud.get(connection.mudName) === connection) {
+      this.byMud.delete(connection.mudName);
+      if (redisService.isConnected()) {
+        redisService.srem('connected_muds', connection.mudName).catch(() => undefined);
+      }
+      logger.info(`MUD disconnected: ${connection.mudName}`, { code, muds: this.byMud.size });
+      this.emit('mudDisconnected', { mudName: connection.mudName, connectionId: connection.id });
     }
   }
 
-  private handleDisconnection(connectionId: string, code: number, reason: Buffer): void {
-    const connection = this.connectionInfo.get(connectionId);
-    const connectionDuration = connection ? Date.now() - connection.connected.getTime() : 0;
-    const reasonText = reason.toString() || 'No reason provided';
-    
-    logger.info(`🔌 DISCONNECTION: ${connectionId}`, {
-      disconnectCode: code,
-      reason: reasonText,
-      mudName: connection?.mudName || 'Unauthenticated',
-      authenticated: connection?.authenticated || false,
-      remoteAddress: connection?.host || 'Unknown',
-      messageCount: connection?.messageCount || 0,
-      connectionDuration: `${Math.round(connectionDuration / 1000)}s`,
-      remainingConnections: this.connections.size - 1,
-      wasAuthenticatedMud: connection?.authenticated && connection?.mudName ? true : false
-    });
-    
-    if (connection?.authenticated && connection?.mudName) {
-      logger.info(`🏠 MUD DISCONNECTED: ${connection.mudName}`, {
-        connectionId,
-        totalMessagesProcessed: connection.messageCount,
-        sessionDuration: `${Math.round(connectionDuration / 1000)}s`,
-        lastSeen: connection.lastSeen.toISOString()
+  /** Closes every live connection that a new ban now covers. */
+  public enforceBans(): number {
+    let closed = 0;
+    for (const connection of this.connections.values()) {
+      if (banService.isIpBanned(connection.host) || (connection.mudName && banService.isMudBanned(connection.mudName))) {
+        connection.authenticated = false;
+        this.closeSoon(connection.ws, CLOSE_BANNED, 'Banned');
+        closed++;
+      }
+    }
+    return closed;
+  }
+
+  private listMuds() {
+    const now = Date.now();
+    const muds = [];
+    for (const [name, mud] of this.byMud) {
+      muds.push({
+        name,
+        version: mud.version,
+        admin: '',
+        email: '',
+        uptime: Math.floor((now - mud.connectedAt) / 1000),
+        users: 0,
+        description: `${name} MUD Server`
       });
-      
-      redisService.srem('connected_muds', connection.mudName);
-      this.mudInfo.delete(connection.mudName);
-      this.emit('mudDisconnected', { mudName: connection.mudName, connectionId });
     }
-
-    this.connections.delete(connectionId);
-    this.connectionInfo.delete(connectionId);
-    this.messageWindows.delete(connectionId);
-  }
-
-  private startHeartbeat(connectionId: string): void {
-    const interval = setInterval(() => {
-      const ws = this.connections.get(connectionId);
-      const connection = this.connectionInfo.get(connectionId);
-      
-      if (!ws || !connection || ws.readyState !== WebSocket.OPEN) {
-        clearInterval(interval);
-        return;
-      }
-
-      const now = Date.now();
-      const lastSeen = connection.lastSeen.getTime();
-      
-      if (now - lastSeen > 60000) { // 60 seconds timeout
-        logger.warn(`Connection ${connectionId} timed out`);
-        ws.terminate();
-        clearInterval(interval);
-        return;
-      }
-
-      ws.ping();
-    }, 30000); // Ping every 30 seconds
-  }
-
-  private updateLastSeen(connectionId: string): void {
-    const connection = this.connectionInfo.get(connectionId);
-    if (connection) {
-      connection.lastSeen = new Date();
-    }
-  }
-
-  private generateConnectionId(): string {
-    return `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return muds;
   }
 
   public getConnections(): ConnectionInfo[] {
-    return Array.from(this.connectionInfo.values());
+    return Array.from(this.connections.values(), c => ({
+      id: c.id,
+      mudName: c.mudName,
+      host: c.host,
+      authenticated: c.authenticated,
+      connected: new Date(c.connectedAt),
+      lastSeen: new Date(c.lastSeenAt),
+      messageCount: c.messageCount,
+      version: c.version
+    }));
   }
 
+  /** Public view of connected MUDs. Never includes addresses. */
   public getMudInfo(): MudInfo[] {
-    return Array.from(this.mudInfo.values());
+    return this.listMuds();
   }
 
   public async close(): Promise<void> {
     logger.info('Shutting down gateway...');
-    
-    for (const ws of this.connections.values()) {
-      ws.close();
+    clearInterval(this.sweepTimer);
+    await this.flushHistory();
+    for (const connection of this.connections.values()) {
+      connection.ws.close(1001, 'Gateway shutting down');
     }
-
     this.server.close();
-    await redisService.disconnect();
   }
 }
 

@@ -26,4 +26,9 @@ jest.mock('../src/services/redis', () => ({
   smembers: jest.fn().mockResolvedValue([]),
   lpush: jest.fn().mockResolvedValue(1),
   ltrim: jest.fn().mockResolvedValue('OK'),
+  del: jest.fn().mockResolvedValue(undefined),
+  lrange: jest.fn().mockResolvedValue([]),
+  pushCapped: jest.fn().mockResolvedValue(undefined),
+  isConnected: jest.fn().mockReturnValue(false),
+  onReady: jest.fn(),
 }));

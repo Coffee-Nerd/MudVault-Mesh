@@ -6,6 +6,8 @@ import channelService from '../services/channel';
 import userService from '../services/user';
 import redisService from '../services/redis';
 import logger from '../utils/logger';
+import banService, { BanType } from '../services/bans';
+import type { Gateway } from '../services/gateway';
 
 const router = express.Router();
 
@@ -31,6 +33,9 @@ router.post('/auth/register', authRateLimit, async (req, res) => {
     if (reason === 'FORBIDDEN') {
       return res.status(403).json({ error: 'Registration is closed' });
     }
+    if (reason === 'RESERVED') {
+      return res.status(400).json({ error: 'That MUD name is reserved' });
+    }
     if (reason === 'EXISTS') {
       return res.status(409).json({ error: 'That MUD name is already registered' });
     }
@@ -45,6 +50,14 @@ router.post('/auth/login', authRateLimit, async (req, res) => {
 
     if (!mudName || !apiKey) {
       return res.status(400).json({ error: 'MUD name and API key are required' });
+    }
+
+    if (typeof mudName !== 'string' || typeof apiKey !== 'string') {
+      return res.status(400).json({ error: 'MUD name and API key must be text' });
+    }
+
+    if (banService.isIpBanned(req.ip ?? '') || banService.isMudBanned(mudName)) {
+      return res.status(403).json({ error: 'Access to the mesh has been suspended' });
     }
 
     const token = await authService.authenticateWithApiKey(mudName, apiKey);
@@ -303,15 +316,8 @@ router.get('/users/search', authenticate, apiRateLimit, async (req: Authenticate
 // MUD management endpoints
 router.get('/muds', authenticate, apiRateLimit, async (req: AuthenticatedRequest, res) => {
   try {
-    const connectedMuds = await redisService.smembers('connected_muds');
-    const mudInfo = [];
-
-    for (const mudName of connectedMuds) {
-      const info = await redisService.get(`mud_info:${mudName}`);
-      if (info) {
-        mudInfo.push(JSON.parse(info));
-      }
-    }
+    const gateway = req.app.locals.gateway as Gateway | undefined;
+    const mudInfo = gateway?.getMudInfo() ?? [];
 
     res.json({
       muds: mudInfo,
@@ -343,7 +349,7 @@ router.post('/muds/:name/who', authenticate, mudRateLimit, async (req: Authentic
 router.get('/stats', authenticate, apiRateLimit, async (req: AuthenticatedRequest, res) => {
   try {
     const stats = userService.getStats();
-    const totalMuds = (await redisService.smembers('connected_muds')).length;
+    const totalMuds = (req.app.locals.gateway as Gateway | undefined)?.getMudInfo().length ?? 0;
     const activeChannels = channelService.getChannels().length;
     const activeSessions = authService.getActiveSessionCount();
 
@@ -367,13 +373,90 @@ router.get('/stats', authenticate, apiRateLimit, async (req: AuthenticatedReques
   }
 });
 
+// Admin endpoints
+const requireAdmin: express.RequestHandler = (req, res, next) => {
+  if (!authService.adminSecretValid(req.headers['x-admin-secret'])) {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+  next();
+};
+
+const banType = (value: unknown): value is BanType => value === 'ip' || value === 'mud';
+
+router.get('/admin/bans', authRateLimit, requireAdmin, (_req, res) => {
+  res.json({ bans: banService.list() });
+});
+
+router.post('/admin/bans', authRateLimit, requireAdmin, async (req, res) => {
+  try {
+    const { type, value, reason, by, minutes } = req.body;
+    if (!banType(type) || typeof value !== 'string') {
+      return res.status(400).json({ error: 'type must be ip or mud, and value is required' });
+    }
+    if (typeof reason !== 'string' || !reason.trim() || reason.length > 500) {
+      return res.status(400).json({ error: 'A reason of up to 500 characters is required' });
+    }
+    if (minutes !== undefined && (!Number.isInteger(minutes) || minutes < 1 || minutes > 525600)) {
+      return res.status(400).json({ error: 'minutes must be a whole number from 1 to 525600' });
+    }
+    const canonical = banService.canonicalValue(type, value);
+    if (!canonical) {
+      return res.status(400).json({ error: type === 'ip' ? 'Use one IP address, or a CIDR no wider than /8 (IPv4) or /32 (IPv6)' : 'Invalid MUD name' });
+    }
+    const actor = typeof by === 'string' && by.trim() ? by.trim().slice(0, 64) : 'admin';
+    const { ban, saved } = await banService.add(type, canonical, reason.trim(), actor, req.ip ?? 'unknown', minutes);
+    if (type === 'mud') {
+      authService.dropSessions(canonical);
+    }
+    const disconnected = (req.app.locals.gateway as Gateway | undefined)?.enforceBans() ?? 0;
+    res.status(201).json({ ban, disconnected, saved });
+  } catch (error) {
+    logger.error('Error adding ban:', error);
+    res.status(500).json({ error: 'Failed to add ban' });
+  }
+});
+
+router.delete('/admin/bans/:type/:value', authRateLimit, requireAdmin, async (req, res) => {
+  try {
+    const { type, value } = req.params;
+    if (!banType(type)) {
+      return res.status(400).json({ error: 'type must be ip or mud' });
+    }
+    const canonical = banService.canonicalValue(type, value);
+    if (!canonical) {
+      return res.status(400).json({ error: 'Invalid value' });
+    }
+    const by = req.get('x-admin-name')?.slice(0, 64) || 'admin';
+    const { removed, saved } = await banService.remove(type, canonical, by, req.ip ?? 'unknown');
+    if (!removed) {
+      return res.status(404).json({ error: 'No such ban' });
+    }
+    res.json({ removed: true, saved });
+  } catch (error) {
+    logger.error('Error removing ban:', error);
+    res.status(500).json({ error: 'Failed to remove ban' });
+  }
+});
+
+router.get('/admin/audit', authRateLimit, requireAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 100, 1), 1000);
+    res.json({ entries: await banService.auditLog(limit) });
+  } catch (error) {
+    logger.error('Error reading audit log:', error);
+    res.status(500).json({ error: 'Failed to read audit log' });
+  }
+});
+
 // Health check endpoint
-router.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
+router.get('/health', (_req, res) => {
+  const redis = redisService.isConnected();
+  res.status(redis ? 200 : 503).json({
+    status: redis ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
-    redis: redisService.isConnected()
+    redis
   });
 });
 

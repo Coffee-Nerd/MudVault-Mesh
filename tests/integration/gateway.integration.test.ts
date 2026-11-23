@@ -2,6 +2,8 @@ import WebSocket from 'ws';
 import { randomUUID } from 'crypto';
 import { Gateway } from '../../src/services/gateway';
 import { authService } from '../../src/middleware/auth';
+import banService from '../../src/services/bans';
+import net from 'net';
 
 const TEST_PORT = 8999;
 const URL = `ws://127.0.0.1:${TEST_PORT}`;
@@ -98,11 +100,13 @@ describe('Gateway', () => {
   };
 
   beforeAll(() => {
-    gateway = new Gateway(TEST_PORT, { mudName: 'Bridge-Client', token: 'bridge-test-token' });
+    gateway = new Gateway(TEST_PORT, { mudName: 'Bridge-Client', token: 'bridge-test-token' }, 1000);
   });
 
-  afterEach(() => {
-    open.splice(0).forEach(client => client.shut());
+  afterEach(async () => {
+    const closing = open.splice(0);
+    closing.forEach(client => client.shut());
+    await Promise.all(closing.map(client => client.whenClosed()));
   });
 
   afterAll(async () => {
@@ -144,6 +148,61 @@ describe('Gateway', () => {
       const sender = await login('Sender-Mud');
       sender.client.send(envelope('tell', { mud: sender.name, user: 'alice' }, { mud: second.name, user: 'bob' }, { message: 'still here' }));
       expect((await second.client.next()).payload.message).toBe('still here');
+    });
+  });
+
+  describe('hardening', () => {
+    test('survives a malformed frame on a refused connection', async () => {
+      const held = await Promise.all(Array.from({ length: 10 }, () => connect()));
+      const raw = net.connect(TEST_PORT, '127.0.0.1');
+      await new Promise<void>(resolve => raw.once('connect', () => resolve()));
+      raw.write('GET / HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n');
+      await new Promise(resolve => raw.once('data', resolve));
+      raw.write(Buffer.from([0xff, 0xff, 0xff, 0xff]));
+      await new Promise(resolve => setTimeout(resolve, 100));
+      raw.destroy();
+      held.forEach(client => client.shut());
+      await Promise.all(held.map(client => client.whenClosed()));
+      const { name } = await login('Still-Alive');
+      expect(name).toBe('still-alive');
+    });
+
+    test('tells a client when its clock makes a login expire', async () => {
+      const client = await connect();
+      const message = envelope('auth', { mud: 'Old-Clock' }, { mud: 'Gateway' }, { mudName: 'Old-Clock', token: authService.generateJWT('Old-Clock') });
+      message.timestamp = new Date(Date.now() - 3600 * 1000).toISOString();
+      client.send(message);
+      expect((await client.next()).payload.message).toContain('clock');
+      expect(await client.whenClosed()).toBe(4401);
+    });
+
+    test('refuses forged gateway messages and broadcast tells', async () => {
+      const a = await login('Forge-A');
+      const b = await login('Forge-B');
+      a.client.send(envelope('error', { mud: a.name }, { mud: b.name }, { code: 1, message: 'forged' }));
+      expect((await a.client.next()).payload.code).toBe(1008);
+      a.client.send(envelope('tell', { mud: a.name }, { mud: '*', user: 'x' }, { message: 'spam' }));
+      expect((await a.client.next()).payload.code).toBe(1008);
+    });
+
+    test('keeps the channel fields consistent', async () => {
+      const a = await login('Field-A');
+      const b = await login('Field-B');
+      a.client.send(envelope('channel', { mud: a.name, user: 'x' }, { mud: '*', channel: 'admin' }, { channel: 'ooc', message: 'hi', action: 'message' }));
+      expect((await b.client.next()).to.channel).toBe('ooc');
+    });
+
+    test('a ban disconnects a live MUD and blocks its next login', async () => {
+      const victim = await login('Banned-Mud');
+      await banService.add('mud', 'banned-mud', 'test', 'test', 'test');
+      expect(gateway.enforceBans()).toBe(1);
+      expect(await victim.client.whenClosed()).toBe(4403);
+
+      const again = await connect();
+      again.send(envelope('auth', { mud: 'Banned-Mud' }, { mud: 'Gateway' }, { mudName: 'Banned-Mud', token: authService.generateJWT('Banned-Mud') }));
+      expect((await again.next()).payload.message).toContain('banned');
+      expect(await again.whenClosed()).toBe(4403);
+      await banService.remove('mud', 'banned-mud', 'test', 'test');
     });
   });
 

@@ -23,10 +23,17 @@ if (!JWT_SECRET || JWT_SECRET.length < 32 || JWT_SECRET === 'your-secret-key-cha
   throw new Error('JWT_SECRET must be set to a strong value');
 }
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const MAX_SESSIONS_PER_MUD = 8;
+const MAX_API_KEY_LENGTH = 128;
+// Compared against when a name is unknown, so timing does not reveal which MUDs exist.
+// It is the hash of a discarded random value, and costs nothing at startup.
+const DUMMY_HASH = '$2b$12$GHmbBdMBUNlneKlCof4P8eJkDRBpsT3ZWTvMBu/HTthLN56ugi0G.';
+const RESERVED_NAMES = new Set(['gateway', 'system', 'admin', 'mudvault']);
 
 export class AuthService {
   private apiKeys: Map<string, string> = new Map(); // mudName -> hashedApiKey
   private activeSessions: Set<string> = new Set(); // Set of active JWT tokens
+  private sessionsByMud: Map<string, Set<string>> = new Map();
 
   constructor() {
     this.loadApiKeysFromRedis();
@@ -49,7 +56,7 @@ export class AuthService {
     }
   }
 
-  private adminSecretValid(provided?: string): boolean {
+  public adminSecretValid(provided?: unknown): boolean {
     const expected = process.env.ADMIN_SECRET;
     if (!expected || expected.length < 32 || typeof provided !== 'string') {
       return false;
@@ -62,6 +69,10 @@ export class AuthService {
   public async generateApiKey(mudName: string, adminSecret?: string, rotate = false): Promise<string> {
     if (!this.adminSecretValid(adminSecret)) {
       throw new Error('FORBIDDEN');
+    }
+
+    if (RESERVED_NAMES.has(mudName.toLowerCase())) {
+      throw new Error('RESERVED');
     }
 
     // Names are case-insensitive on the mesh, so "dark-wizardry" must not be
@@ -91,27 +102,26 @@ export class AuthService {
   }
 
   public async validateApiKey(mudName: string, apiKey: string): Promise<boolean> {
+    if (typeof mudName !== 'string' || typeof apiKey !== 'string' || apiKey.length === 0 || apiKey.length > MAX_API_KEY_LENGTH) {
+      return false;
+    }
+
     let hashedKey = this.apiKeys.get(mudName);
-    
-    // If not in memory cache, try to load from Redis
     if (!hashedKey) {
       try {
-        const redisKey = await redisService.get(`api_key:${mudName}`);
-        if (redisKey) {
-          hashedKey = redisKey;
-          this.apiKeys.set(mudName, hashedKey);
-          logger.info(`Loaded API key for ${mudName} from Redis`);
-        } else {
-          return false;
+        const stored = await redisService.get(`api_key:${mudName}`);
+        if (stored) {
+          hashedKey = stored;
+          this.apiKeys.set(mudName, stored);
         }
       } catch (error) {
         logger.error(`Error loading API key for ${mudName} from Redis:`, error);
-        return false;
       }
     }
 
     try {
-      return await bcrypt.compare(apiKey, hashedKey);
+      const matches = await bcrypt.compare(apiKey, hashedKey ?? DUMMY_HASH);
+      return matches && hashedKey !== undefined;
     } catch (error) {
       logger.error(`Error validating API key for ${mudName}:`, error);
       return false;
@@ -135,9 +145,22 @@ export class AuthService {
       exp: Math.floor(Date.now() / 1000) + this.parseExpiration(JWT_EXPIRES_IN)
     };
 
-    const token = jwt.sign(payload, JWT_SECRET);
+    const token = jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256' });
     this.activeSessions.add(token);
-    
+
+    // Reconnects mint new tokens, so keep only the newest few per MUD.
+    let tokens = this.sessionsByMud.get(mudName);
+    if (!tokens) {
+      tokens = new Set();
+      this.sessionsByMud.set(mudName, tokens);
+    }
+    tokens.add(token);
+    if (tokens.size > MAX_SESSIONS_PER_MUD) {
+      const oldest = tokens.values().next().value as string;
+      tokens.delete(oldest);
+      this.activeSessions.delete(oldest);
+    }
+
     return token;
   }
 
@@ -147,7 +170,7 @@ export class AuthService {
         return null;
       }
 
-      const payload = jwt.verify(token, JWT_SECRET) as JWTPayload;
+      const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as JWTPayload;
       return payload;
     } catch (error) {
       logger.warn('Invalid JWT token:', error instanceof Error ? error.message : 'Unknown error');
@@ -155,17 +178,22 @@ export class AuthService {
     }
   }
 
-  private dropSessions(mudName: string): void {
-    for (const token of this.activeSessions) {
-      const payload = jwt.decode(token) as JWTPayload | null;
-      if (!payload || payload.mudName === mudName) {
+  public dropSessions(mudName: string): void {
+    const tokens = this.sessionsByMud.get(mudName);
+    if (tokens) {
+      for (const token of tokens) {
         this.activeSessions.delete(token);
       }
+      this.sessionsByMud.delete(mudName);
     }
   }
 
   public revokeJWT(token: string): void {
     this.activeSessions.delete(token);
+    const payload = jwt.decode(token) as JWTPayload | null;
+    if (payload?.mudName) {
+      this.sessionsByMud.get(payload.mudName)?.delete(token);
+    }
   }
 
   public async authenticateWithApiKey(mudName: string, apiKey: string): Promise<string | null> {
@@ -201,7 +229,7 @@ export class AuthService {
       try {
         const payload = jwt.decode(token) as JWTPayload;
         if (payload && payload.exp < now) {
-          this.activeSessions.delete(token);
+          this.revokeJWT(token);
         }
       } catch (error) {
         this.activeSessions.delete(token);
@@ -289,6 +317,6 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
 // Start cleanup interval
 setInterval(() => {
   authService.cleanupExpiredSessions();
-}, 60000); // Every minute
+}, 60000).unref(); // Every minute
 
 export default authService;

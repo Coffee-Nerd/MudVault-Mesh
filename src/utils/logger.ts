@@ -8,7 +8,7 @@ const logFormat = winston.format.combine(
     
     // Add metadata if present
     if (Object.keys(meta).length > 0) {
-      logMessage += `\n${JSON.stringify(meta, null, 2)}`;
+      logMessage += ` ${JSON.stringify(meta)}`;
     }
     
     return logMessage;
