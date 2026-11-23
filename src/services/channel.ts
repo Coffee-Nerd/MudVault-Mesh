@@ -10,7 +10,8 @@ export class ChannelService extends EventEmitter {
 
   constructor() {
     super();
-    this.loadChannelsFromRedis();
+    // This service is created before Redis connects, so load once it is ready.
+    redisService.onReady(() => void this.loadChannelsFromRedis());
   }
 
   private async loadChannelsFromRedis(): Promise<void> {

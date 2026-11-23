@@ -36,7 +36,8 @@ export class AuthService {
   private sessionsByMud: Map<string, Set<string>> = new Map();
 
   constructor() {
-    this.loadApiKeysFromRedis();
+    // This service is created before Redis connects, so load once it is ready.
+    redisService.onReady(() => void this.loadApiKeysFromRedis());
   }
 
   private async loadApiKeysFromRedis(): Promise<void> {
