@@ -1,0 +1,791 @@
+{
+ "version": "1.0",
+ "valid": [
+  {
+   "name": "tell",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "tell",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "message": "hello"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "empty tell",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "tell",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "message": ""
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "channel",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "channel",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "*",
+     "channel": "ooc"
+    },
+    "payload": {
+     "channel": "ooc",
+     "message": "hi",
+     "action": "message"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "channel join",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "channel",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "*",
+     "channel": "ooc"
+    },
+    "payload": {
+     "channel": "ooc",
+     "action": "join"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "emote",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "emote",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "action": "waves"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "emoteto",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "emoteto",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "action": "waves at",
+     "target": "bob"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "who request",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "who",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "Gateway"
+    },
+    "payload": {
+     "request": true
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "who reply",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "who",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "users": [
+      {
+       "username": "bob",
+       "idle": 5
+      }
+     ],
+     "request": false
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "finger",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "finger",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "user": "bob",
+     "request": true
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "locate",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "locate",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "*"
+    },
+    "payload": {
+     "user": "bob",
+     "request": true
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "presence",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "presence",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "*"
+    },
+    "payload": {
+     "status": "away"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "mudlist",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "mudlist",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "Gateway"
+    },
+    "payload": {
+     "request": true
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "channels",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "channels",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "Gateway"
+    },
+    "payload": {
+     "request": true
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "auth",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "auth",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "Gateway"
+    },
+    "payload": {
+     "mudName": "alpha-mud",
+     "token": "abc"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "ping",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "ping",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "Gateway"
+    },
+    "payload": {
+     "timestamp": 1700000000000
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "timestamp without milliseconds",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00Z",
+    "type": "tell",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "message": "x"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  }
+ ],
+ "invalid": [
+  {
+   "name": "wrong version",
+   "message": {
+    "version": "2.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "tell",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "message": "x"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "bad id",
+   "message": {
+    "version": "1.0",
+    "id": "nope",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "tell",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "message": "x"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "bad timestamp",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "yesterday",
+    "type": "tell",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "message": "x"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "unknown type",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "shout",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "message": "x"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "tell without text",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "tell",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {},
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "tell too long",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "tell",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "message": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "bad channel name",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "channel",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "*"
+    },
+    "payload": {
+     "channel": "bad name",
+     "message": "x",
+     "action": "message"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "bad channel action",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "channel",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "*"
+    },
+    "payload": {
+     "channel": "ooc",
+     "message": "x",
+     "action": "shout"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "priority too high",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "tell",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "message": "x"
+    },
+    "metadata": {
+     "priority": 11,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "ttl too long",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "tell",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "message": "x"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 3601,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "unknown field",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "tell",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "message": "x"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    },
+    "extra": true
+   }
+  },
+  {
+   "name": "unknown payload field",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "tell",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "message": "x",
+     "extra": 1
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "missing sender",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "tell",
+    "from": {
+     "user": "alice"
+    },
+    "to": {
+     "mud": "beta-mud",
+     "user": "bob"
+    },
+    "payload": {
+     "message": "x"
+    },
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  },
+  {
+   "name": "ping without time",
+   "message": {
+    "version": "1.0",
+    "id": "7f1b6c1e-2d0a-4b53-9a51-0f3c8a4a9d11",
+    "timestamp": "2026-11-23T08:00:00.000Z",
+    "type": "ping",
+    "from": {
+     "mud": "alpha-mud",
+     "user": "alice"
+    },
+    "to": {
+     "mud": "Gateway"
+    },
+    "payload": {},
+    "metadata": {
+     "priority": 5,
+     "ttl": 300,
+     "encoding": "utf-8",
+     "language": "en"
+    }
+   }
+  }
+ ]
+}
