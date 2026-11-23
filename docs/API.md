@@ -543,3 +543,20 @@ asyncio.run(mudvault_client())
 ```
 
 For more examples and detailed integration guides, see the [Integration Guide](INTEGRATION.md).
+
+## Admin: bans and audit log
+
+These endpoints need the `X-Admin-Secret` header. A ban takes effect immediately and disconnects anything it covers.
+
+| Method | Path | Purpose |
+| :-- | :-- | :-- |
+| `GET` | `/api/v1/admin/bans` | List active bans |
+| `POST` | `/api/v1/admin/bans` | Add a ban |
+| `DELETE` | `/api/v1/admin/bans/:type/:value` | Remove a ban. URL-encode the `/` in a CIDR |
+| `GET` | `/api/v1/admin/audit?limit=100` | Read recent admin actions, newest first |
+
+```json
+{ "type": "ip", "value": "203.0.113.0/24", "reason": "Spam", "by": "admin-name", "minutes": 1440 }
+```
+
+`type` is `ip` or `mud`. `value` is a MUD name, an IP address, or a CIDR no wider than `/8` for IPv4 or `/32` for IPv6. Leave out `minutes` for a permanent ban.

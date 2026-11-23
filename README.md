@@ -119,7 +119,8 @@ Because that is where it is going. The goal is a network of **linked gateway nod
 | 🟡 | **Presence** | Defined in the protocol, not yet wired through clients |
 | 🟡 | **Client libraries** | Node.js and Python are updated in this repo, with new releases to come |
 | 🟡 | **Automated tests** | Unit and gateway tests run in CI, with more coverage to come |
-| 🔵 | **MudVault accounts and bans** | See the [roadmap](#-roadmap) |
+| 🟢 | **IP, subnet, and MUD bans with an audit log** | [HTTP API](docs/API.md#admin-bans-and-audit-log) |
+| 🔵 | **MudVault accounts** | See the [roadmap](#-roadmap) |
 | 🔵 | **Multi-gateway mesh** | See the [roadmap](#-roadmap) |
 
 ## ✉ The protocol
@@ -260,14 +261,18 @@ The reply contains your API key **once**, so save it somewhere private. With the
 - [x] Add connection, login, and message limits
 - [x] Keep MUD server addresses private
 - [x] Encrypt all traffic with TLS
-- [ ] Add IP and account bans with an audit trail
+- [x] Add IP, subnet, and MUD bans with an audit trail
+- [x] Survive malformed frames, Redis outages, and clients that stop reading
+- [ ] Rotate gateway logs on the production server
 
 ### Phase 2: Open the network
 
 - [ ] Publish the full admin setup guide
-- [ ] Add external uptime checks with Discord alerts
+- [x] Build the external uptime checker
+- [ ] Turn on uptime alerts with a Discord webhook
 - [x] Repair CI
-- [ ] Build a shared protocol test suite
+- [x] Reduce per-message overhead in logging, parsing, routing, and storage
+- [x] Build a shared protocol test suite ([vectors](docs/protocol-vectors.json))
 - [x] Update the Node.js and Python clients for verified logins
 - [ ] Publish the updated clients and a reference C client
 - [ ] Welcome the first outside MUDs
@@ -276,7 +281,6 @@ The reply contains your API key **once**, so save it somewhere private. With the
 
 - [ ] Sign in with a MudVault account
 - [ ] Chat on the mesh directly from the MudForge client
-- [ ] Reduce per-message overhead in logging, parsing, and storage
 
 ### Phase 4: Become a true mesh
 
@@ -298,12 +302,14 @@ MudVault-Mesh/
 │   ├── services/
 │   │   ├── gateway.ts        WebSocket gateway and routing
 │   │   ├── discord.ts        Discord bridge
+│   │   ├── bans.ts           Bans and audit log
 │   │   ├── channel.ts        Channels
 │   │   ├── user.ts           Users and presence
 │   │   └── redis.ts          Storage
 │   └── utils/                Validation, messages, logging
 ├── packages/                 Node.js, Python, and Discord packages
 ├── examples/dikumud/         Early C integration example
+├── scripts/                  External uptime check
 ├── tests/                    Jest tests
 └── docs/                     Protocol and API references
 ```
@@ -315,6 +321,7 @@ MudVault-Mesh/
 | [Protocol](docs/PROTOCOL.md) | Original protocol specification |
 | [Commands](docs/COMMANDS.md) | JSON examples for each command |
 | [HTTP API](docs/API.md) | REST endpoint reference |
+| [Protocol vectors](docs/protocol-vectors.json) | Valid and invalid messages for testing any client |
 | [Integration](docs/INTEGRATION.md) | Early notes on adding the mesh to a MUD |
 | [Design](mudvault-mesh-design.md) | The original long-term vision |
 
