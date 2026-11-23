@@ -263,7 +263,7 @@ The reply contains your API key **once**, so save it somewhere private. With the
 - [x] Encrypt all traffic with TLS
 - [x] Add IP, subnet, and MUD bans with an audit trail
 - [x] Survive malformed frames, Redis outages, and clients that stop reading
-- [ ] Rotate gateway logs on the production server
+- [x] Rotate gateway logs on the production server
 
 ### Phase 2: Open the network
 
