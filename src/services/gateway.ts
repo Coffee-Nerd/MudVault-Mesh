@@ -50,7 +50,11 @@ export class Gateway extends EventEmitter {
 
   private handleConnection(ws: WebSocket, req: any): void {
     const connectionId = this.generateConnectionId();
-    const remoteAddress = req.socket.remoteAddress;
+    // Behind nginx the socket is loopback, and nginx sets X-Real-IP itself.
+    const socketAddress: string = req.socket.remoteAddress;
+    const forwarded = req.headers['x-real-ip'];
+    const behindProxy = process.env.TRUST_PROXY === 'true' && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(socketAddress);
+    const remoteAddress: string = behindProxy && typeof forwarded === 'string' && forwarded ? forwarded : socketAddress;
     if (!this.admitConnection(remoteAddress)) {
       ws.close(CLOSE_TOO_MANY, 'Too many connections');
       return;

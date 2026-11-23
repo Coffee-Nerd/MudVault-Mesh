@@ -43,7 +43,7 @@ app.use(express.urlencoded({ extended: true, limit: '64kb' }));
 
 // Trust proxy if configured
 if (process.env.TRUST_PROXY === 'true') {
-  app.set('trust proxy', true);
+  app.set('trust proxy', 'loopback');
 }
 
 // API routes
