@@ -1,8 +1,7 @@
 import { validateMessage, validateMudName, normalizeMudName } from '../../src/utils/validation';
-import { MudVaultMessage } from '../../src/types';
 
 describe('validateMessage', () => {
-  const createValidMessage = (overrides: Partial<MudVaultMessage> = {}): any => ({
+  const createValidMessage = (overrides: Record<string, unknown> = {}): any => ({
     version: '1.0',
     id: '550e8400-e29b-41d4-a716-446655440000',
     timestamp: '2025-01-26T12:34:56.789Z',
@@ -232,11 +231,11 @@ describe('validateMudName', () => {
 
 describe('normalizeMudName', () => {
   test('should normalize MUD names correctly', () => {
-    expect(normalizeMudName('Test MUD')).toBe('Test-MUD');
-    expect(normalizeMudName('Dark  Wizardry')).toBe('Dark-Wizardry');
-    expect(normalizeMudName('MUD@#$Test')).toBe('MUDTest');
-    expect(normalizeMudName('  MUD  Test  ')).toBe('MUD-Test');
-    expect(normalizeMudName('MUD---Test')).toBe('MUD-Test');
+    expect(normalizeMudName('Test MUD')).toBe('test-mud');
+    expect(normalizeMudName('Dark  Wizardry')).toBe('dark-wizardry');
+    expect(normalizeMudName('MUD@#$Test')).toBe('mudtest');
+    expect(normalizeMudName('  MUD  Test  ')).toBe('mud-test');
+    expect(normalizeMudName('MUD---Test')).toBe('mud-test');
   });
 
   test('should handle edge cases', () => {

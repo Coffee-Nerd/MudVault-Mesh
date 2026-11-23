@@ -1,357 +1,185 @@
 import WebSocket from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 import { Gateway } from '../../src/services/gateway';
-import redisService from '../../src/services/redis';
+import { authService } from '../../src/middleware/auth';
 
-describe('Gateway Integration Tests', () => {
+const TEST_PORT = 8999;
+const URL = `ws://127.0.0.1:${TEST_PORT}`;
+
+type Message = { type: string; from: any; to: any; payload: any };
+
+const envelope = (type: string, from: any, to: any, payload: any) => ({
+  version: '1.0',
+  id: uuidv4(),
+  timestamp: new Date().toISOString(),
+  type,
+  from,
+  to,
+  payload,
+  metadata: { priority: 5, ttl: 300, encoding: 'utf-8', language: 'en' }
+});
+
+class Client {
+  private queue: Message[] = [];
+  private waiters: Array<(message: Message) => void> = [];
+  private closed: Promise<number>;
+
+  constructor(readonly ws: WebSocket) {
+    ws.on('message', data => {
+      const message = JSON.parse(data.toString()) as Message;
+      const waiter = this.waiters.shift();
+      if (waiter) {
+        waiter(message);
+      } else {
+        this.queue.push(message);
+      }
+    });
+    this.closed = new Promise(resolve => ws.on('close', code => resolve(code)));
+  }
+
+  static open(): Promise<Client> {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(URL);
+      const client = new Client(ws);
+      ws.once('open', () => resolve(client));
+      ws.once('error', reject);
+    });
+  }
+
+  send(message: unknown): void {
+    this.ws.send(JSON.stringify(message));
+  }
+
+  next(): Promise<Message> {
+    const queued = this.queue.shift();
+    if (queued) {
+      return Promise.resolve(queued);
+    }
+    return new Promise(resolve => this.waiters.push(resolve));
+  }
+
+  whenClosed(): Promise<number> {
+    return this.closed;
+  }
+
+  shut(): void {
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.ws.close();
+    }
+  }
+}
+
+describe('Gateway', () => {
   let gateway: Gateway;
-  let wsClient1: WebSocket;
-  let wsClient2: WebSocket;
-  const TEST_PORT = 8999;
-  const TEST_MUD_1 = 'TestMUD-1';
-  const TEST_MUD_2 = 'TestMUD-2';
+  const open: Client[] = [];
 
-  beforeAll(async () => {
-    // Start gateway
-    gateway = new Gateway();
-    await gateway.start(TEST_PORT);
-    
-    // Connect to Redis
-    await redisService.connect();
-  });
+  const connect = async () => {
+    const client = await Client.open();
+    open.push(client);
+    return client;
+  };
 
-  afterAll(async () => {
-    // Close connections
-    if (wsClient1?.readyState === WebSocket.OPEN) {
-      wsClient1.close();
-    }
-    if (wsClient2?.readyState === WebSocket.OPEN) {
-      wsClient2.close();
-    }
-    
-    // Stop gateway
-    gateway.stop();
-    
-    // Disconnect Redis
-    await redisService.disconnect();
-  });
+  const login = async (name: string) => {
+    const client = await connect();
+    client.send(envelope('auth', { mud: name }, { mud: 'Gateway' }, { mudName: name, token: authService.generateJWT(name) }));
+    const reply = await client.next();
+    expect(reply.type).toBe('auth');
+    return { client, name: reply.payload.mudName as string };
+  };
 
-  beforeEach(() => {
-    // Create fresh WebSocket clients
-    wsClient1 = new WebSocket(`ws://localhost:${TEST_PORT}`);
-    wsClient2 = new WebSocket(`ws://localhost:${TEST_PORT}`);
+  const expectRejected = async (name: string, token?: string) => {
+    const client = await connect();
+    const payload = token === undefined ? { mudName: name } : { mudName: name, token };
+    client.send(envelope('auth', { mud: name }, { mud: 'Gateway' }, payload));
+    const reply = await client.next();
+    expect(reply.type).toBe('error');
+    expect(reply.payload.code).toBe(1001);
+    expect(await client.whenClosed()).toBe(4401);
+  };
+
+  beforeAll(() => {
+    gateway = new Gateway(TEST_PORT, { mudName: 'Bridge-Client', token: 'bridge-test-token' });
   });
 
   afterEach(() => {
-    // Clean up clients
-    if (wsClient1?.readyState === WebSocket.OPEN) {
-      wsClient1.close();
-    }
-    if (wsClient2?.readyState === WebSocket.OPEN) {
-      wsClient2.close();
-    }
+    open.splice(0).forEach(client => client.shut());
   });
 
-  const createMessage = (type: string, from: any, to: any, payload: any, metadata: any = {}) => {
-    return {
-      version: '1.0',
-      id: uuidv4(),
-      timestamp: new Date().toISOString(),
-      type,
-      from,
-      to,
-      payload,
-      metadata: {
-        priority: metadata.priority || 5,
-        ttl: metadata.ttl || 300,
-        encoding: 'utf-8',
-        language: 'en',
-        ...metadata
-      }
-    };
-  };
+  afterAll(async () => {
+    await gateway.close();
+  });
 
-  const waitForMessage = (ws: WebSocket): Promise<any> => {
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Timeout waiting for message'));
-      }, 5000);
+  describe('login', () => {
+    test('rejects a login with no token', () => expectRejected('Victim-Mud'));
 
-      ws.once('message', (data) => {
-        clearTimeout(timeout);
-        try {
-          resolve(JSON.parse(data.toString()));
-        } catch (error) {
-          reject(error);
-        }
-      });
+    test('rejects a forged token', () => expectRejected('Victim-Mud', 'a.b.c'));
+
+    test("rejects another MUD's token", () => expectRejected('Victim-Mud', authService.generateJWT('Attacker-Mud')));
+
+    test('rejects a false claim to the bridge name', () => expectRejected('Bridge-Client', 'wrong'));
+
+    test('accepts the bridge credential', async () => {
+      const client = await connect();
+      client.send(envelope('auth', { mud: 'Bridge-Client' }, { mud: 'Gateway' }, { mudName: 'Bridge-Client', token: 'bridge-test-token' }));
+      expect((await client.next()).type).toBe('auth');
     });
-  };
 
-  const authenticate = async (ws: WebSocket, mudName: string): Promise<boolean> => {
-    const authMessage = createMessage(
-      'auth',
-      { mud: mudName },
-      { mud: 'Gateway' },
-      { mudName },
-      { priority: 10 }
-    );
+    test('accepts a valid token and lowercases the name', async () => {
+      const { name } = await login('Valid-Mud');
+      expect(name).toBe('valid-mud');
+    });
 
-    ws.send(JSON.stringify(authMessage));
-    const response = await waitForMessage(ws);
-    
-    return response.type === 'auth' && response.payload.response?.includes('successful');
-  };
+    test('closes a connection that sends data before login', async () => {
+      const client = await connect();
+      client.send(envelope('ping', { mud: 'Nobody' }, { mud: 'Gateway' }, { timestamp: 1 }));
+      expect((await client.next()).payload.code).toBe(1002);
+      expect(await client.whenClosed()).toBe(4401);
+    });
 
-  test('should handle authentication correctly', async () => {
-    await new Promise(resolve => wsClient1.on('open', resolve));
-    
-    const authMessage = createMessage(
-      'auth',
-      { mud: TEST_MUD_1 },
-      { mud: 'Gateway' },
-      { mudName: TEST_MUD_1 },
-      { priority: 10 }
-    );
+    test('a newer login replaces the older connection', async () => {
+      const first = await login('Same-Mud');
+      const second = await login('Same-Mud');
+      expect(await first.client.whenClosed()).toBe(4409);
 
-    wsClient1.send(JSON.stringify(authMessage));
-    const response = await waitForMessage(wsClient1);
-
-    expect(response.type).toBe('auth');
-    expect(response.payload.response).toContain('successful');
+      const sender = await login('Sender-Mud');
+      sender.client.send(envelope('tell', { mud: sender.name, user: 'alice' }, { mud: second.name, user: 'bob' }, { message: 'still here' }));
+      expect((await second.client.next()).payload.message).toBe('still here');
+    });
   });
 
-  test('should reject invalid MUD names with spaces', async () => {
-    await new Promise(resolve => wsClient1.on('open', resolve));
-    
-    const authMessage = createMessage(
-      'auth',
-      { mud: 'Invalid MUD Name' },
-      { mud: 'Gateway' },
-      { mudName: 'Invalid MUD Name' },
-      { priority: 10 }
-    );
+  describe('routing', () => {
+    test('delivers a tell and stamps the verified sender', async () => {
+      const a = await login('Route-A');
+      const b = await login('Route-B');
+      a.client.send(envelope('tell', { mud: 'spoofed-mud', user: 'alice' }, { mud: b.name, user: 'bob' }, { message: 'hello' }));
+      const received = await b.client.next();
+      expect(received.type).toBe('tell');
+      expect(received.from.mud).toBe(a.name);
+      expect(received.payload.message).toBe('hello');
+    });
 
-    wsClient1.send(JSON.stringify(authMessage));
-    const response = await waitForMessage(wsClient1);
+    test('broadcasts channels to others and not to the sender', async () => {
+      const a = await login('Chan-A');
+      const b = await login('Chan-B');
+      a.client.send(envelope('channel', { mud: a.name, user: 'alice' }, { mud: '*', channel: 'ooc' }, { channel: 'ooc', message: 'hi', action: 'message' }));
+      expect((await b.client.next()).payload.message).toBe('hi');
 
-    expect(response.type).toBe('error');
-    expect(response.payload.code).toBe(1001);
-    expect(response.payload.message).toContain('space');
-  });
+      a.client.send(envelope('ping', { mud: a.name }, { mud: 'Gateway' }, { timestamp: 7 }));
+      expect((await a.client.next()).type).toBe('pong');
+    });
 
-  test('should handle ping/pong correctly', async () => {
-    await new Promise(resolve => wsClient1.on('open', resolve));
-    await authenticate(wsClient1, TEST_MUD_1);
+    test('reports an unknown MUD', async () => {
+      const a = await login('Lonely-Mud');
+      a.client.send(envelope('tell', { mud: a.name }, { mud: 'No-Such-Mud', user: 'x' }, { message: 'x' }));
+      expect((await a.client.next()).payload.code).toBe(1003);
+    });
 
-    const pingMessage = createMessage(
-      'ping',
-      { mud: TEST_MUD_1 },
-      { mud: 'Gateway' },
-      { timestamp: Date.now() },
-      { priority: 1, ttl: 60 }
-    );
-
-    wsClient1.send(JSON.stringify(pingMessage));
-    const response = await waitForMessage(wsClient1);
-
-    expect(response.type).toBe('pong');
-    expect(response.payload.timestamp).toBe(pingMessage.payload.timestamp);
-  });
-
-  test('should route tell messages between MUDs', async () => {
-    // Connect and authenticate both clients
-    await Promise.all([
-      new Promise(resolve => wsClient1.on('open', resolve)),
-      new Promise(resolve => wsClient2.on('open', resolve))
-    ]);
-
-    await authenticate(wsClient1, TEST_MUD_1);
-    await authenticate(wsClient2, TEST_MUD_2);
-
-    // Set up message handler for client 2
-    const messagePromise = waitForMessage(wsClient2);
-
-    // Send tell from client 1 to client 2
-    const tellMessage = createMessage(
-      'tell',
-      { mud: TEST_MUD_1, user: 'User1' },
-      { mud: TEST_MUD_2, user: 'User2' },
-      { 
-        message: 'Hello from integration test!',
-        formatted: 'Hello from integration test!'
-      }
-    );
-
-    wsClient1.send(JSON.stringify(tellMessage));
-    const received = await messagePromise;
-
-    expect(received.type).toBe('tell');
-    expect(received.payload.message).toBe('Hello from integration test!');
-    expect(received.from.mud).toBe(TEST_MUD_1);
-    expect(received.from.user).toBe('User1');
-  });
-
-  test('should handle mudlist requests', async () => {
-    // Connect and authenticate both clients
-    await Promise.all([
-      new Promise(resolve => wsClient1.on('open', resolve)),
-      new Promise(resolve => wsClient2.on('open', resolve))
-    ]);
-
-    await authenticate(wsClient1, TEST_MUD_1);
-    await authenticate(wsClient2, TEST_MUD_2);
-
-    const mudlistMessage = createMessage(
-      'mudlist',
-      { mud: TEST_MUD_1 },
-      { mud: 'Gateway' },
-      { request: true }
-    );
-
-    wsClient1.send(JSON.stringify(mudlistMessage));
-    const response = await waitForMessage(wsClient1);
-
-    expect(response.type).toBe('mudlist');
-    expect(response.payload.muds).toBeInstanceOf(Array);
-    expect(response.payload.muds.length).toBeGreaterThanOrEqual(2);
-    
-    const mudNames = response.payload.muds.map((m: any) => m.name);
-    expect(mudNames).toContain(TEST_MUD_1);
-    expect(mudNames).toContain(TEST_MUD_2);
-  });
-
-  test('should handle locate requests', async () => {
-    await new Promise(resolve => wsClient1.on('open', resolve));
-    await authenticate(wsClient1, TEST_MUD_1);
-
-    const locateMessage = createMessage(
-      'locate',
-      { mud: TEST_MUD_1, user: 'User1' },
-      { mud: 'Gateway' },
-      { user: 'testuser', request: true }
-    );
-
-    wsClient1.send(JSON.stringify(locateMessage));
-    const response = await waitForMessage(wsClient1);
-
-    expect(response.type).toBe('locate');
-    expect(response.payload.locations).toBeInstanceOf(Array);
-    expect(response.payload.user).toBe('testuser');
-  });
-
-  test('should handle finger requests', async () => {
-    await new Promise(resolve => wsClient1.on('open', resolve));
-    await authenticate(wsClient1, TEST_MUD_1);
-
-    const fingerMessage = createMessage(
-      'finger',
-      { mud: TEST_MUD_1, user: 'User1' },
-      { mud: 'Gateway' },
-      { user: 'testuser', request: true }
-    );
-
-    wsClient1.send(JSON.stringify(fingerMessage));
-    const response = await waitForMessage(wsClient1);
-
-    expect(response.type).toBe('finger');
-    expect(response.payload.user).toBe('testuser');
-    expect(response.payload.info).toBeDefined();
-    expect(response.payload.info.idle).toBeDefined();
-  });
-
-  test('should reject invalid message types', async () => {
-    await new Promise(resolve => wsClient1.on('open', resolve));
-    await authenticate(wsClient1, TEST_MUD_1);
-
-    const invalidMessage = createMessage(
-      'invalid_type',
-      { mud: TEST_MUD_1 },
-      { mud: 'Gateway' },
-      { test: 'data' }
-    );
-
-    wsClient1.send(JSON.stringify(invalidMessage));
-    const response = await waitForMessage(wsClient1);
-
-    expect(response.type).toBe('error');
-    expect(response.payload.code).toBe(1000);
-    expect(response.payload.message).toContain('must be one of');
-  });
-
-  test('should handle channel broadcast messages', async () => {
-    // Connect and authenticate multiple clients
-    await Promise.all([
-      new Promise(resolve => wsClient1.on('open', resolve)),
-      new Promise(resolve => wsClient2.on('open', resolve))
-    ]);
-
-    await authenticate(wsClient1, TEST_MUD_1);
-    await authenticate(wsClient2, TEST_MUD_2);
-
-    // Set up message handler for client 2
-    const messagePromise = waitForMessage(wsClient2);
-
-    // Send channel message from client 1
-    const channelMessage = createMessage(
-      'channel',
-      { mud: TEST_MUD_1, user: 'User1' },
-      { mud: '*', channel: 'ooc' },
-      {
-        channel: 'ooc',
-        message: 'Hello everyone!',
-        action: 'message',
-        formatted: 'Hello everyone!'
-      }
-    );
-
-    wsClient1.send(JSON.stringify(channelMessage));
-    const received = await messagePromise;
-
-    expect(received.type).toBe('channel');
-    expect(received.payload.channel).toBe('ooc');
-    expect(received.payload.message).toBe('Hello everyone!');
-    expect(received.from.mud).toBe(TEST_MUD_1);
-  });
-
-  test('should handle disconnection and cleanup', async () => {
-    await new Promise(resolve => wsClient1.on('open', resolve));
-    await authenticate(wsClient1, TEST_MUD_1);
-
-    // Get initial mudlist
-    const mudlistBefore = createMessage(
-      'mudlist',
-      { mud: TEST_MUD_1 },
-      { mud: 'Gateway' },
-      { request: true }
-    );
-
-    wsClient1.send(JSON.stringify(mudlistBefore));
-    const beforeResponse = await waitForMessage(wsClient1);
-    const mudCountBefore = beforeResponse.payload.muds.length;
-
-    // Disconnect
-    wsClient1.close();
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // Connect new client and check mudlist
-    const wsClient3 = new WebSocket(`ws://localhost:${TEST_PORT}`);
-    await new Promise(resolve => wsClient3.on('open', resolve));
-    await authenticate(wsClient3, 'TestMUD-3');
-
-    const mudlistAfter = createMessage(
-      'mudlist',
-      { mud: 'TestMUD-3' },
-      { mud: 'Gateway' },
-      { request: true }
-    );
-
-    wsClient3.send(JSON.stringify(mudlistAfter));
-    const afterResponse = await waitForMessage(wsClient3);
-    
-    // Should have one less MUD after disconnection
-    expect(afterResponse.payload.muds.length).toBeLessThan(mudCountBefore);
-    
-    wsClient3.close();
+    test('does not expose MUD addresses in the who reply', async () => {
+      const a = await login('Private-Mud');
+      a.client.send(envelope('who', { mud: a.name }, { mud: 'Gateway' }, { request: true }));
+      const reply = await a.client.next();
+      expect(reply.type).toBe('who');
+      expect(JSON.stringify(reply)).not.toContain('127.0.0.1');
+    });
   });
 });

@@ -8,6 +8,8 @@ config({ path: '.env.test' });
 process.env.NODE_ENV = 'test';
 process.env.PORT = '3001';
 process.env.WS_PORT = '3002';
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-only-secret-that-is-at-least-32-characters';
+process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'error';
 process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379/1';
 
 // Global test timeout

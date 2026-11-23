@@ -1,7 +1,7 @@
 import express from 'express';
 import { authenticate, authService, AuthenticatedRequest } from '../middleware/auth';
 import { apiRateLimit, mudRateLimit, authRateLimit } from '../middleware/rateLimiter';
-import { validateMessage, validateMudName } from '../utils/validation';
+import { validateMudName } from '../utils/validation';
 import channelService from '../services/channel';
 import userService from '../services/user';
 import redisService from '../services/redis';
