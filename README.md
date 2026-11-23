@@ -2,11 +2,11 @@
 
 <div align="center">
 
-[![Build Status](https://github.com/mudvault/OpenIMC/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/mudvault/OpenIMC/actions)
-[![Coverage](https://codecov.io/gh/mudvault/OpenIMC/branch/main/graph/badge.svg)](https://codecov.io/gh/mudvault/OpenIMC)
+[![Build Status](https://github.com/Coffee-Nerd/MudVault-Mesh/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/Coffee-Nerd/MudVault-Mesh/actions)
+[![Coverage](https://codecov.io/gh/Coffee-Nerd/MudVault-Mesh/branch/main/graph/badge.svg)](https://codecov.io/gh/Coffee-Nerd/MudVault-Mesh)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/r6kM56YrEV)
-[![Docker](https://img.shields.io/badge/Docker-Available-blue?logo=docker)](https://github.com/mudvault/OpenIMC/pkgs/container/mudvault-mesh)
+[![Docker](https://img.shields.io/badge/Docker-Available-blue?logo=docker)](https://github.com/Coffee-Nerd/MudVault-Mesh/pkgs/container/mudvault-mesh)
 
 **Production-ready inter-MUD communication protocol and gateway**
 
@@ -69,7 +69,7 @@ MudVault Mesh is a **complete, production-ready** inter-MUD communication system
 #### 1. Test the Connection
 ```bash
 # Test WebSocket connection
-wscat -c ws://86.38.203.37:8082
+wscat -c ws://ws.mesh.mudvault.org
 
 # Send authentication (replace TestMUD with your MUD name)
 {"version":"1.0","id":"test-001","timestamp":"2025-07-26T12:00:00Z","type":"auth","from":{"mud":"TestMUD"},"to":{"mud":"Gateway"},"payload":{"mudName":"TestMUD"},"metadata":{"priority":10,"ttl":300,"encoding":"utf-8","language":"en"}}
@@ -103,7 +103,7 @@ client.on('channel', (message) => {
 });
 
 // Connect to live server
-client.connect('ws://86.38.203.37:8082');
+client.connect('ws://ws.mesh.mudvault.org');
 ```
 
 #### 3. Python Integration
@@ -117,8 +117,8 @@ client.connect('ws://86.38.203.37:8082');
 #### Docker Deployment (Recommended)
 ```bash
 # Clone repository
-git clone https://github.com/mudvault/OpenIMC.git
-cd OpenIMC
+git clone https://github.com/Coffee-Nerd/MudVault-Mesh.git
+cd mudvault-mesh
 
 # Configure environment
 cp .env.example .env
@@ -131,6 +131,10 @@ docker-compose up -d
 # WebSocket: ws://localhost:8082
 # API: http://localhost:8084
 # Discord integration: Configured via .env
+
+# For production deployment:
+# WebSocket: ws://ws.mesh.mudvault.org
+# API: http://mesh.mudvault.org
 ```
 
 #### Manual Installation
@@ -163,7 +167,8 @@ npm start
 - **[API Documentation](docs/API.md)**: REST API reference *(coming soon)*
 
 ### Live Examples
-- **Test Server**: `ws://86.38.203.37:8082` (24/7 available for testing)
+- **Test Server**: `ws://ws.mesh.mudvault.org` (24/7 available for testing)
+- **API Server**: `http://mesh.mudvault.org` (REST API endpoints)
 - **Protocol Tests**: Run `node test-messages.js` to test all commands
 - **Integration Tests**: Full test suite with 100% protocol coverage
 
@@ -172,19 +177,23 @@ npm start
 ## 🌐 Live Demo
 
 ### Public Test Server
-**WebSocket Endpoint**: `ws://86.38.203.37:8082`
+**WebSocket Endpoint**: `ws://ws.mesh.mudvault.org`  
+**API Endpoint**: `http://mesh.mudvault.org`
 
 **Available 24/7 for testing and development!**
 
 ```bash
+# Test API health
+curl http://mesh.mudvault.org/api/v1/health
+
 # Test all protocol commands
 node test-messages.js
 
 # Test advanced features  
 node test-additional-commands.js
 
-# Manual testing with wscat
-wscat -c ws://86.38.203.37:8082
+# Manual WebSocket testing
+wscat -c ws://ws.mesh.mudvault.org
 ```
 
 ### Discord Integration Demo
@@ -269,7 +278,7 @@ Join our Discord server to see MudVault Mesh in action:
 ### ✅ Phase 4: Developer Experience (COMPLETE)
 - ✅ Client libraries (Node.js, Python planned)
 - ✅ Integration guide and examples
-- ✅ Live test server (86.38.203.37:8082)
+- ✅ Live test server (ws.mesh.mudvault.org)
 - ✅ CI/CD pipeline with automated testing
 - ✅ GitHub Actions with security scanning
 
@@ -317,8 +326,8 @@ We welcome contributions from the MUD community! MudVault Mesh is built by MUD d
 ### Quick Start for Contributors
 ```bash
 # 1. Fork and clone
-git clone https://github.com/YOUR_USERNAME/OpenIMC.git
-cd OpenIMC
+git clone https://github.com/Coffee-Nerd/MudVault-Mesh.git
+cd mudvault-mesh
 
 # 2. Install dependencies  
 npm install
@@ -342,12 +351,13 @@ npm run dev
 See **[CONTRIBUTING.md](CONTRIBUTING.md)** for detailed guidelines.
 
 ### Areas Where We Need Help
-- 🐍 **Python Client Library**: Help build the Python SDK
-- 🦀 **Rust Client**: Rust implementation for performance-critical MUDs
-- 📚 **Documentation**: More examples and tutorials
-- 🧪 **Testing**: Additional test cases and performance tests
-- 🌐 **Internationalization**: Multi-language support
-- 🎨 **Web Interface**: Browser-based admin dashboard
+- 🔧 **C/C++ Client Libraries**: Native libraries for traditional MUD codebases (LPC, C++, etc.)
+- 🐍 **Python SDK for Evennia**: Enhanced Python integration for Evennia-based MUDs
+- 🦀 **Rust Client**: High-performance client for Rust-based MUDs
+- 🎨 **Admin Dashboard**: Browser-based administration interface
+- 🌐 **Internationalization**: Multi-language support for global MUD communities
+- 📚 **Documentation**: More integration examples and MUD-specific guides
+- 🧪 **Testing**: Additional test coverage and performance benchmarks
 
 ---
 
@@ -355,8 +365,8 @@ See **[CONTRIBUTING.md](CONTRIBUTING.md)** for detailed guidelines.
 
 ### Getting Help
 - **📖 Documentation**: [Complete docs](docs/) with examples
-- **🐛 Bug Reports**: [GitHub Issues](https://github.com/mudvault/OpenIMC/issues)
-- **💬 Discussions**: [GitHub Discussions](https://github.com/mudvault/OpenIMC/discussions)  
+- **🐛 Bug Reports**: [GitHub Issues](https://github.com/Coffee-Nerd/MudVault-Mesh/issues)
+- **💬 Discussions**: [GitHub Discussions](https://github.com/Coffee-Nerd/MudVault-Mesh/discussions)  
 - **🎮 Discord**: [Join our community](https://discord.gg/r6kM56YrEV)
 - **📧 Email**: support@mudvault.org
 
@@ -395,6 +405,6 @@ MudVault Mesh is and will always remain **100% open source**. We believe in:
 
 **Made with ❤️ by the MUD community, for the MUD community**
 
-[⭐ Star this repo](https://github.com/mudvault/OpenIMC) • [🍴 Fork and contribute](https://github.com/mudvault/OpenIMC/fork) • [💬 Join Discord](https://discord.gg/r6kM56YrEV)
+[⭐ Star this repo](https://github.com/Coffee-Nerd/MudVault-Mesh) • [🍴 Fork and contribute](https://github.com/Coffee-Nerd/MudVault-Mesh/fork) • [💬 Join Discord](https://discord.gg/r6kM56YrEV)
 
 </div>

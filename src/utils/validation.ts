@@ -5,7 +5,12 @@ const messageEndpointSchema = Joi.object({
   mud: Joi.string().required(),
   user: Joi.string().optional(),
   displayName: Joi.string().optional(),
-  channel: Joi.string().optional()
+  channel: Joi.string().optional().custom((value, helpers) => {
+    if (value && !validateChannelName(value)) {
+      return helpers.message({ custom: 'Channel name must be 1-32 characters, alphanumeric, dashes, or underscores only' });
+    }
+    return value;
+  })
 });
 
 const messageMetadataSchema = Joi.object({
@@ -32,7 +37,12 @@ const emotePayloadSchema = Joi.object({
 });
 
 const channelPayloadSchema = Joi.object({
-  channel: Joi.string().required(),
+  channel: Joi.string().required().custom((value, helpers) => {
+    if (!validateChannelName(value)) {
+      return helpers.message({ custom: 'Channel name must be 1-32 characters, alphanumeric, dashes, or underscores only' });
+    }
+    return value;
+  }),
   message: Joi.string().max(4096).allow('').optional(),
   action: Joi.string().valid('join', 'leave', 'message', 'list').optional(),
   formatted: Joi.string().max(8192).optional()
