@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { MudVaultMessage, ConnectionInfo, MudInfo, ErrorCodes, WhoUser } from '../types';
@@ -5,14 +6,32 @@ import { validateMessage, validateMudName, normalizeMudName } from '../utils/val
 import { createErrorMessage, createPongMessage, createMessage, isExpired } from '../utils/message';
 import logger from '../utils/logger';
 import redisService from './redis';
+import { authService } from '../middleware/auth';
+
+const MAX_CONNECTIONS = 500;
+const MAX_CONNECTIONS_PER_IP = 10;
+const MAX_CONNECT_ATTEMPTS_PER_MINUTE = 30;
+const MAX_MESSAGES_PER_MINUTE = 300;
+const AUTH_TIMEOUT_MS = 10000;
+const CLOSE_AUTH_FAILED = 4401;
+const CLOSE_AUTH_TIMEOUT = 4408;
+const CLOSE_REPLACED = 4409;
+const CLOSE_TOO_MANY = 4429;
+
+export interface InternalClient {
+  mudName: string;
+  token: string;
+}
 
 export class Gateway extends EventEmitter {
   private connections: Map<string, WebSocket> = new Map();
   private connectionInfo: Map<string, ConnectionInfo> = new Map();
   private mudInfo: Map<string, MudInfo> = new Map();
   private server: WebSocket.Server;
+  private connectAttempts: Map<string, { start: number; count: number }> = new Map();
+  private messageWindows: Map<string, { start: number; count: number }> = new Map();
 
-  constructor(port: number) {
+  constructor(port: number, private internalClient?: InternalClient) {
     super();
     
     this.server = new WebSocket.Server({ 
@@ -32,6 +51,10 @@ export class Gateway extends EventEmitter {
   private handleConnection(ws: WebSocket, req: any): void {
     const connectionId = this.generateConnectionId();
     const remoteAddress = req.socket.remoteAddress;
+    if (!this.admitConnection(remoteAddress)) {
+      ws.close(CLOSE_TOO_MANY, 'Too many connections');
+      return;
+    }
     const userAgent = req.headers['user-agent'] || 'Unknown';
     const origin = req.headers.origin || 'Unknown';
     
@@ -61,6 +84,13 @@ export class Gateway extends EventEmitter {
       version: '1.0'
     });
 
+    const authTimer = setTimeout(() => {
+      if (!this.connectionInfo.get(connectionId)?.authenticated) {
+        this.closeSoon(ws, CLOSE_AUTH_TIMEOUT, 'Authentication timeout');
+      }
+    }, AUTH_TIMEOUT_MS);
+    ws.once('close', () => clearTimeout(authTimer));
+
     ws.on('message', (data) => {
       this.handleMessage(connectionId, data);
     });
@@ -88,6 +118,77 @@ export class Gateway extends EventEmitter {
     this.startHeartbeat(connectionId);
   }
 
+  private admitConnection(ip: string): boolean {
+    const now = Date.now();
+    if (this.connectAttempts.size > 5000) {
+      for (const [key, entry] of this.connectAttempts) {
+        if (now - entry.start >= 60000) {
+          this.connectAttempts.delete(key);
+        }
+      }
+    }
+    let attempts = this.connectAttempts.get(ip);
+    if (!attempts || now - attempts.start >= 60000) {
+      attempts = { start: now, count: 0 };
+      this.connectAttempts.set(ip, attempts);
+    }
+    attempts.count++;
+    if (attempts.count > MAX_CONNECT_ATTEMPTS_PER_MINUTE || this.connections.size >= MAX_CONNECTIONS) {
+      return false;
+    }
+    let fromIp = 0;
+    for (const info of this.connectionInfo.values()) {
+      if (info.host === ip) {
+        fromIp++;
+      }
+    }
+    return fromIp < MAX_CONNECTIONS_PER_IP;
+  }
+
+  private closeSoon(ws: WebSocket, code: number, reason: string): void {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.close(code, reason);
+    }
+    setTimeout(() => ws.terminate(), 2000).unref();
+  }
+
+  private rejectUnauthenticated(connectionId: string): void {
+    const ws = this.connections.get(connectionId);
+    const connection = this.connectionInfo.get(connectionId);
+    if (ws && connection && !connection.authenticated) {
+      this.closeSoon(ws, CLOSE_AUTH_FAILED, 'Authentication failed');
+    }
+  }
+
+  private overMessageLimit(connectionId: string): boolean {
+    const now = Date.now();
+    let window = this.messageWindows.get(connectionId);
+    if (!window || now - window.start >= 60000) {
+      window = { start: now, count: 0 };
+      this.messageWindows.set(connectionId, window);
+    }
+    window.count++;
+    if (window.count === MAX_MESSAGES_PER_MINUTE + 1) {
+      this.sendError(connectionId, ErrorCodes.RATE_LIMITED, 'Too many messages. Slow down.');
+    }
+    return window.count > MAX_MESSAGES_PER_MINUTE;
+  }
+
+  private tokenAllowed(token: unknown, finalMudName: string, host: string): boolean {
+    if (typeof token !== 'string' || token.length === 0 || token.length > 2048) {
+      return false;
+    }
+    const internal = this.internalClient;
+    if (internal && normalizeMudName(internal.mudName).toLowerCase() === finalMudName) {
+      const loopback = host === '127.0.0.1' || host === '::1' || host === '::ffff:127.0.0.1';
+      const a = crypto.createHash('sha256').update(token).digest();
+      const b = crypto.createHash('sha256').update(internal.token).digest();
+      return loopback && crypto.timingSafeEqual(a, b);
+    }
+    const payload = authService.verifyJWT(token);
+    return !!payload && normalizeMudName(payload.mudName).toLowerCase() === finalMudName;
+  }
+
   private async handleMessage(connectionId: string, data: WebSocket.Data): Promise<void> {
     try {
       const connection = this.connectionInfo.get(connectionId);
@@ -98,6 +199,9 @@ export class Gateway extends EventEmitter {
 
       connection.lastSeen = new Date();
       connection.messageCount++;
+      if (this.overMessageLimit(connectionId)) {
+        return;
+      }
 
       const messageText = data.toString();
       const messageSize = Buffer.byteLength(messageText, 'utf8');
@@ -108,7 +212,6 @@ export class Gateway extends EventEmitter {
         messageSize,
         messageCount: connection.messageCount,
         rawLength: messageText.length,
-        preview: messageText.substring(0, 200) + (messageText.length > 200 ? '...' : '')
       });
 
       let messageData: any;
@@ -119,9 +222,9 @@ export class Gateway extends EventEmitter {
         logger.error(`❌ JSON PARSE ERROR: ${connectionId}`, {
           mudName: connection.mudName || 'Unauthenticated',
           error: error instanceof Error ? error.message : 'Unknown error',
-          rawData: messageText.substring(0, 500)
         });
         this.sendError(connectionId, ErrorCodes.INVALID_MESSAGE, 'Invalid JSON format');
+        this.rejectUnauthenticated(connectionId);
         return;
       }
 
@@ -132,11 +235,10 @@ export class Gateway extends EventEmitter {
           error: validation.error,
           messageType: messageData.type || 'Unknown',
           messageId: messageData.id || 'No ID',
-          messageSize: messageText.length,
-          rawMessage: messageText.substring(0, 1000),
-          parsedData: JSON.stringify(messageData, null, 2).substring(0, 1000)
+          messageSize: messageText.length
         });
         this.sendError(connectionId, ErrorCodes.INVALID_MESSAGE, validation.error);
+        this.rejectUnauthenticated(connectionId);
         return;
       }
 
@@ -169,6 +271,7 @@ export class Gateway extends EventEmitter {
 
       if (!connection.authenticated) {
         this.sendError(connectionId, ErrorCodes.UNAUTHORIZED, 'Authentication required');
+        this.rejectUnauthenticated(connectionId);
         return;
       }
 
@@ -192,7 +295,12 @@ export class Gateway extends EventEmitter {
       return;
     }
 
-    const { mudName } = message.payload as any;
+    if (connection.authenticated) {
+      this.sendError(connectionId, ErrorCodes.PROTOCOL_ERROR, 'Already authenticated');
+      return;
+    }
+
+    const { mudName, token } = message.payload as any;
     
     logger.info(`🔐 AUTHENTICATION ATTEMPT: ${connectionId}`, {
       attemptedMudName: mudName,
@@ -209,6 +317,7 @@ export class Gateway extends EventEmitter {
         mudNameType: typeof mudName
       });
       this.sendError(connectionId, ErrorCodes.AUTHENTICATION_FAILED, 'Missing mud name');
+      this.rejectUnauthenticated(connectionId);
       return;
     }
 
@@ -224,11 +333,19 @@ export class Gateway extends EventEmitter {
       
       this.sendError(connectionId, ErrorCodes.AUTHENTICATION_FAILED, 
         `Invalid MUD name "${mudName}". MUD names can only contain letters, numbers, dashes, and underscores (no spaces). Suggested name: "${suggestedName}". This ensures proper parsing of intermud commands like: tell user@${suggestedName} message`);
+      this.rejectUnauthenticated(connectionId);
       return;
     }
 
     // Normalize mudName for case-insensitive matching
     const finalMudName = normalizeMudName(mudName).toLowerCase();
+
+    if (!this.tokenAllowed(token, finalMudName, connection.host)) {
+      logger.warn(`AUTH FAILED - bad token: ${connectionId}`, { attemptedMudName: finalMudName, remoteAddress: connection.host });
+      this.sendError(connectionId, ErrorCodes.AUTHENTICATION_FAILED, 'Invalid or expired token. Log in again.');
+      this.rejectUnauthenticated(connectionId);
+      return;
+    }
 
     // Check if MUD name is already connected
     const existingMud = Array.from(this.connectionInfo.values()).find(
@@ -242,6 +359,12 @@ export class Gateway extends EventEmitter {
         newRemoteAddress: connection.host,
         existingRemoteAddress: existingMud.host
       });
+      // The token proved ownership, so the newest connection wins.
+      existingMud.authenticated = false;
+      const previous = this.connections.get(existingMud.id);
+      if (previous) {
+        this.closeSoon(previous, CLOSE_REPLACED, 'Replaced by a newer connection');
+      }
     }
 
     connection.mudName = finalMudName;
@@ -472,7 +595,7 @@ export class Gateway extends EventEmitter {
           title: 'MUD Server',
           level: 'System',
           idle: idleSeconds,
-          location: connection.host,
+          location: 'MudVault Mesh',
           flags: ['mud', 'system'],
           realName: `${mudName} (Connected ${uptimeSeconds}s ago)`
         });
@@ -606,7 +729,6 @@ export class Gateway extends EventEmitter {
         
         mudList.push({
           name: mudName,
-          host: connection.host,
           version: connection.version,
           admin: '', // Could be populated from MUD info
           email: '', // Could be populated from MUD info
@@ -789,6 +911,7 @@ export class Gateway extends EventEmitter {
 
     this.connections.delete(connectionId);
     this.connectionInfo.delete(connectionId);
+    this.messageWindows.delete(connectionId);
   }
 
   private startHeartbeat(connectionId: string): void {

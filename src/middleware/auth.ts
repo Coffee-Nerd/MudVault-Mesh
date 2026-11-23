@@ -71,6 +71,10 @@ export class AuthService {
     if (clash && (!rotate || clash !== mudName)) {
       throw new Error('EXISTS');
     }
+    if (clash) {
+      // A rotated key must also end sessions opened with the old one.
+      this.dropSessions(clash);
+    }
 
     const apiKey = this.generateRandomKey();
     const hashedKey = await bcrypt.hash(apiKey, 12);
@@ -116,6 +120,7 @@ export class AuthService {
 
   public async revokeApiKey(mudName: string): Promise<void> {
     this.apiKeys.delete(mudName);
+    this.dropSessions(mudName);
     
     await redisService.del(`api_key:${mudName}`);
     await redisService.srem('api_keys', mudName);
@@ -147,6 +152,15 @@ export class AuthService {
     } catch (error) {
       logger.warn('Invalid JWT token:', error instanceof Error ? error.message : 'Unknown error');
       return null;
+    }
+  }
+
+  private dropSessions(mudName: string): void {
+    for (const token of this.activeSessions) {
+      const payload = jwt.decode(token) as JWTPayload | null;
+      if (!payload || payload.mudName === mudName) {
+        this.activeSessions.delete(token);
+      }
     }
   }
 

@@ -1,5 +1,6 @@
 // Must stay first: auth, redis and logger read process.env at import time.
 import 'dotenv/config';
+import crypto from 'crypto';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -107,7 +108,11 @@ async function startServer() {
     
     // Start WebSocket gateway
     logger.info(`Starting WebSocket gateway on port ${WS_PORT}...`);
-    const gateway = new Gateway(WS_PORT);
+    // The Discord bridge runs in this process, so it gets a one-boot credential.
+    const bridgeClient = process.env.DISCORD_ENABLED === 'true'
+      ? { mudName: process.env.DISCORD_MUD_NAME || 'DiscordBridge', token: crypto.randomBytes(32).toString('hex') }
+      : undefined;
+    const gateway = new Gateway(WS_PORT, bridgeClient);
 
     // Initialize Discord service if enabled
     let discordService: DiscordService | null = null;
@@ -141,7 +146,7 @@ async function startServer() {
         rateLimitCommands: parseInt(process.env.DISCORD_RATE_LIMIT_COMMANDS || '5')
       };
 
-      discordService = new DiscordService(discordConfig, logger, `ws://localhost:${WS_PORT}`);
+      discordService = new DiscordService(discordConfig, logger, `ws://localhost:${WS_PORT}`, bridgeClient?.token);
       await discordService.start();
     }
     

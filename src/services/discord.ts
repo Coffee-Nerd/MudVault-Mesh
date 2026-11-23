@@ -33,7 +33,7 @@ export class DiscordService extends EventEmitter {
   private userMappings: Map<string, UserMapping> = new Map();
   private verificationCodes: Map<string, { discordId: string; mudName: string; mudUsername: string; expires: Date }> = new Map();
 
-  constructor(config: DiscordConfig, logger: winston.Logger, private mudvaultUrl: string) {
+  constructor(config: DiscordConfig, logger: winston.Logger, private mudvaultUrl: string, private gatewayToken?: string) {
     super();
     this.config = config;
     this.logger = logger;
@@ -84,7 +84,7 @@ export class DiscordService extends EventEmitter {
     await this.discordClient.login(this.config.token);
     
     // Connect to MudVault as a client
-    await this.imcClient.connect(this.mudvaultUrl);
+    await this.imcClient.connect(this.mudvaultUrl, this.gatewayToken);
     
     // Join configured channels
     for (const channel of this.config.channels) {

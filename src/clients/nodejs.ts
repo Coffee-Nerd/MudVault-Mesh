@@ -41,6 +41,7 @@ export class MudVaultClient extends EventEmitter {
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private gatewayUrl: string = '';
+  private authToken?: string;
 
   constructor(options: MudVaultClientOptions) {
     super();
@@ -65,6 +66,9 @@ export class MudVaultClient extends EventEmitter {
     }
 
     this.gatewayUrl = gatewayUrl;
+    if (apiKey !== undefined) {
+      this.authToken = apiKey;
+    }
 
     return new Promise((resolve, reject) => {
       try {
@@ -81,7 +85,7 @@ export class MudVaultClient extends EventEmitter {
           this.state.reconnectAttempts = 0;
           
           this.emit('connected');
-          this.authenticate(apiKey).then(() => {
+          this.authenticate(this.authToken).then(() => {
             resolve();
           }).catch(reject);
         });

@@ -157,7 +157,7 @@ export interface UserLocation {
 
 export interface MudInfo {
   name: string;
-  host: string;
+  host?: string;
   port?: number;
   version: string;
   admin: string;
