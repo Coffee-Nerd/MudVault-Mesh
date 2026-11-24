@@ -577,6 +577,12 @@ export class Gateway extends EventEmitter {
       this.perIp.delete(connection.host);
     }
 
+    this.detach(connection, code);
+  }
+
+  /** Takes a MUD out of routing at once, without waiting for its socket to finish closing. */
+  private detach(connection: Connection, code: number): void {
+    connection.authenticated = false;
     if (connection.mudName && this.byMud.get(connection.mudName) === connection) {
       this.byMud.delete(connection.mudName);
       if (redisService.isConnected()) {
@@ -592,7 +598,7 @@ export class Gateway extends EventEmitter {
     let closed = 0;
     for (const connection of this.connections.values()) {
       if (banService.isIpBanned(connection.host) || (connection.mudName && banService.isMudBanned(connection.mudName))) {
-        connection.authenticated = false;
+        this.detach(connection, CLOSE_BANNED);
         this.closeSoon(connection.ws, CLOSE_BANNED, 'Banned');
         closed++;
       }
@@ -606,7 +612,7 @@ export class Gateway extends EventEmitter {
     if (!connection) {
       return false;
     }
-    connection.authenticated = false;
+    this.detach(connection, CLOSE_AUTH_FAILED);
     this.closeSoon(connection.ws, CLOSE_AUTH_FAILED, 'Access revoked');
     return true;
   }

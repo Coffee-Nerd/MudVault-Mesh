@@ -231,8 +231,10 @@ describe('Gateway', () => {
     test('revoking a MUD disconnects it', async () => {
       const victim = await login('Revoked-Mud');
       expect(gateway.disconnectMud('Revoked-Mud')).toBe(true);
-      expect(await victim.client.whenClosed()).toBe(4401);
+      // Out of routing immediately, before the socket finishes closing.
+      expect(gateway.getMudInfo().some(mud => mud.name === 'revoked-mud')).toBe(false);
       expect(gateway.disconnectMud('revoked-mud')).toBe(false);
+      expect(await victim.client.whenClosed()).toBe(4401);
     });
 
     test('admin starts closed to everyone', async () => {
