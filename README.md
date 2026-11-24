@@ -119,6 +119,7 @@ Because that is where it is going. The goal is a network of **linked gateway nod
 | 🟡 | **Presence** | Defined in the protocol, not yet wired through clients |
 | 🟡 | **Client libraries** | Node.js and Python are updated in this repo, with new releases to come |
 | 🟡 | **Automated tests** | Unit and gateway tests run in CI, with more coverage to come |
+| 🟢 | **Restricted channels, such as staff-only `admin`** | [HTTP API](docs/API.md#admin-restricted-channels) |
 | 🟢 | **IP, subnet, and MUD bans with an audit log** | [HTTP API](docs/API.md#admin-bans-and-audit-log) |
 | 🔵 | **MudVault accounts** | See the [roadmap](#-roadmap) |
 | 🔵 | **Multi-gateway mesh** | See the [roadmap](#-roadmap) |
@@ -264,12 +265,13 @@ The reply contains your API key **once**, so save it somewhere private. With the
 - [x] Add IP, subnet, and MUD bans with an audit trail
 - [x] Survive malformed frames, Redis outages, and clients that stop reading
 - [x] Rotate gateway logs on the production server
+- [x] Restrict staff channels to approved MUDs
 
 ### Phase 2: Open the network
 
 - [ ] Publish the full admin setup guide
 - [x] Build the external uptime checker
-- [ ] Turn on uptime alerts with a Discord webhook
+- [x] Turn on uptime alerts with a Discord webhook
 - [x] Repair CI
 - [x] Reduce per-message overhead in logging, parsing, routing, and storage
 - [x] Build a shared protocol test suite ([vectors](docs/protocol-vectors.json))

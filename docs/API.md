@@ -560,3 +560,13 @@ These endpoints need the `X-Admin-Secret` header. A ban takes effect immediately
 ```
 
 `type` is `ip` or `mud`. `value` is a MUD name, an IP address, or a CIDR no wider than `/8` for IPv4 or `/32` for IPv6. Leave out `minutes` for a permanent ban.
+
+## Admin: restricted channels
+
+A restricted channel reaches, and accepts posts from, only the MUDs on its list. Its messages are never stored in the shared history. `admin` is restricted, and closed to everyone, until you add MUDs to it. All three endpoints need the `X-Admin-Secret` header and are recorded in the audit log.
+
+| Method | Path | Purpose |
+| :-- | :-- | :-- |
+| `GET` | `/api/v1/admin/channels` | List restricted channels and their MUDs |
+| `PUT` | `/api/v1/admin/channels/:name` | Restrict a channel to `{ "muds": ["dark-wizardry"], "by": "admin-name" }`. This replaces the whole list |
+| `DELETE` | `/api/v1/admin/channels/:name` | Open the channel to every MUD again |
