@@ -451,6 +451,23 @@ router.get('/admin/audit', authRateLimit, requireAdmin, async (req, res) => {
   }
 });
 
+router.delete('/admin/muds/:name', authRateLimit, requireAdmin, async (req, res) => {
+  try {
+    const registered = await authService.registeredName(req.params.name);
+    if (!registered) {
+      return res.status(404).json({ error: 'No MUD is registered with that name' });
+    }
+    await authService.revokeApiKey(registered);
+    const disconnected = (req.app.locals.gateway as Gateway | undefined)?.disconnectMud(registered) ?? false;
+    const by = req.get('x-admin-name')?.slice(0, 64) || 'admin';
+    await banService.audit('mud.revoke', by, req.ip ?? 'unknown', { mud: registered, disconnected });
+    res.json({ revoked: registered, disconnected });
+  } catch (error) {
+    logger.error('Error revoking MUD:', error);
+    res.status(500).json({ error: 'Failed to revoke MUD' });
+  }
+});
+
 router.get('/admin/channels', authRateLimit, requireAdmin, (_req, res) => {
   res.json({ restricted: channelAccess.list() });
 });

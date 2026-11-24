@@ -129,6 +129,12 @@ export class AuthService {
     }
   }
 
+  /** Finds the registered spelling of a name, which may differ in capitals. */
+  public async registeredName(mudName: string): Promise<string | undefined> {
+    const registered = await redisService.smembers('api_keys');
+    return registered.find(name => name.toLowerCase() === mudName.toLowerCase());
+  }
+
   public async revokeApiKey(mudName: string): Promise<void> {
     this.apiKeys.delete(mudName);
     this.dropSessions(mudName);

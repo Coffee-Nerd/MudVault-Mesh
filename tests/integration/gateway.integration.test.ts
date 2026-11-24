@@ -228,6 +228,13 @@ describe('Gateway', () => {
       expect((await outsider.client.next()).payload.message).toBe('public');
     });
 
+    test('revoking a MUD disconnects it', async () => {
+      const victim = await login('Revoked-Mud');
+      expect(gateway.disconnectMud('Revoked-Mud')).toBe(true);
+      expect(await victim.client.whenClosed()).toBe(4401);
+      expect(gateway.disconnectMud('revoked-mud')).toBe(false);
+    });
+
     test('admin starts closed to everyone', async () => {
       const fresh = new (channelAccess.constructor as any)();
       expect(fresh.allowed('admin')?.size).toBe(0);

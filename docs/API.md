@@ -554,6 +554,7 @@ These endpoints need the `X-Admin-Secret` header. A ban takes effect immediately
 | `POST` | `/api/v1/admin/bans` | Add a ban |
 | `DELETE` | `/api/v1/admin/bans/:type/:value` | Remove a ban. URL-encode the `/` in a CIDR |
 | `GET` | `/api/v1/admin/audit?limit=100` | Read recent admin actions, newest first |
+| `DELETE` | `/api/v1/admin/muds/:name` | Revoke a MUD's API key, end its sessions, and disconnect it. Register it again to issue a new key |
 
 ```json
 { "type": "ip", "value": "203.0.113.0/24", "reason": "Spam", "by": "admin-name", "minutes": 1440 }

@@ -600,6 +600,17 @@ export class Gateway extends EventEmitter {
     return closed;
   }
 
+  /** Closes a MUD's live connection, for example after its key is revoked. */
+  public disconnectMud(name: string): boolean {
+    const connection = this.byMud.get(normalizeMudName(name));
+    if (!connection) {
+      return false;
+    }
+    connection.authenticated = false;
+    this.closeSoon(connection.ws, CLOSE_AUTH_FAILED, 'Access revoked');
+    return true;
+  }
+
   private listMuds() {
     const now = Date.now();
     const muds = [];
