@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { Gateway } from '../../src/services/gateway';
 import { authService } from '../../src/middleware/auth';
 import banService from '../../src/services/bans';
+import channelAccess from '../../src/services/channelAccess';
 import net from 'net';
 
 const TEST_PORT = 8999;
@@ -203,6 +204,34 @@ describe('Gateway', () => {
       expect((await again.next()).payload.message).toContain('banned');
       expect(await again.whenClosed()).toBe(4403);
       await banService.remove('mud', 'banned-mud', 'test', 'test');
+    });
+  });
+
+  describe('restricted channels', () => {
+    const post = (from: { client: Client; name: string }, channel: string, text: string) =>
+      from.client.send(envelope('channel', { mud: from.name, user: 'x' }, { mud: '*', channel }, { channel, message: text, action: 'message' }));
+
+    test('only listed MUDs can read or post', async () => {
+      const staffA = await login('Staff-A');
+      const staffB = await login('Staff-B');
+      const outsider = await login('Outsider');
+      await channelAccess.restrict('admin', ['staff-a', 'Staff-B'], 'test', 'test');
+
+      post(staffA, 'ADMIN', 'staff only');
+      expect((await staffB.client.next()).payload.message).toBe('staff only');
+
+      post(outsider, 'admin', 'let me in');
+      expect((await outsider.client.next()).payload.code).toBe(1002);
+
+      // The outsider received nothing from the staff post: its next message is this public one.
+      post(staffA, 'ooc', 'public');
+      expect((await outsider.client.next()).payload.message).toBe('public');
+    });
+
+    test('admin starts closed to everyone', async () => {
+      const fresh = new (channelAccess.constructor as any)();
+      expect(fresh.allowed('admin')?.size).toBe(0);
+      expect(fresh.allowed('ooc')).toBeUndefined();
     });
   });
 

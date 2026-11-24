@@ -11,6 +11,7 @@ import redisService from './services/redis';
 import userService from './services/user';
 import channelService from './services/channel';
 import banService from './services/bans';
+import channelAccess from './services/channelAccess';
 import logger from './utils/logger';
 
 const app = express();
@@ -114,6 +115,7 @@ async function startServer() {
     logger.info('Initializing services...');
     await userService.initialize();
     await banService.load();
+    await channelAccess.load();
     
     // Start WebSocket gateway
     logger.info(`Starting WebSocket gateway on port ${WS_PORT}...`);

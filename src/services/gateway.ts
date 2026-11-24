@@ -7,6 +7,7 @@ import { createErrorMessage, createPongMessage, createMessage } from '../utils/m
 import logger from '../utils/logger';
 import redisService from './redis';
 import banService from './bans';
+import channelAccess from './channelAccess';
 import { authService } from '../middleware/auth';
 
 const MAX_CONNECTIONS = 500;
@@ -380,6 +381,15 @@ export class Gateway extends EventEmitter {
         this.sendError(connection, ErrorCodes.PROTOCOL_ERROR, `${message.type} cannot be broadcast`);
         return;
       }
+      if (message.type === 'channel') {
+        const allowed = channelAccess.allowed(payloadOf(message).channel);
+        if (allowed && !allowed.has(connection.mudName)) {
+          this.sendError(connection, ErrorCodes.UNAUTHORIZED, `This MUD does not have access to #${payloadOf(message).channel}`);
+          return;
+        }
+        this.broadcast(connection, message, allowed);
+        return;
+      }
       this.broadcast(connection, message);
     } else if (target === 'Gateway' || target.toLowerCase() === 'gateway') {
       this.handleGatewayMessage(connection, message);
@@ -397,10 +407,20 @@ export class Gateway extends EventEmitter {
     }
   }
 
-  private broadcast(sender: Connection, message: MudVaultMessage): void {
+  private broadcast(sender: Connection, message: MudVaultMessage, allowed?: ReadonlySet<string>): void {
     // Serialize once and share one buffer between every recipient.
     const text = JSON.stringify(message);
     const frame = Buffer.from(text);
+    if (allowed) {
+      for (const name of allowed) {
+        const connection = this.byMud.get(name);
+        if (connection && connection !== sender) {
+          this.sendFrame(connection, frame);
+        }
+      }
+      // Restricted traffic never enters the history that every MUD can read.
+      return;
+    }
     for (const connection of this.byMud.values()) {
       if (connection !== sender) {
         this.sendFrame(connection, frame);

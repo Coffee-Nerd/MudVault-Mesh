@@ -7,6 +7,8 @@ import userService from '../services/user';
 import redisService from '../services/redis';
 import logger from '../utils/logger';
 import banService, { BanType } from '../services/bans';
+import channelAccess from '../services/channelAccess';
+import { validateChannelName } from '../utils/validation';
 import type { Gateway } from '../services/gateway';
 
 const router = express.Router();
@@ -446,6 +448,43 @@ router.get('/admin/audit', authRateLimit, requireAdmin, async (req, res) => {
   } catch (error) {
     logger.error('Error reading audit log:', error);
     res.status(500).json({ error: 'Failed to read audit log' });
+  }
+});
+
+router.get('/admin/channels', authRateLimit, requireAdmin, (_req, res) => {
+  res.json({ restricted: channelAccess.list() });
+});
+
+router.put('/admin/channels/:name', authRateLimit, requireAdmin, async (req, res) => {
+  try {
+    const { name } = req.params;
+    const { muds, by } = req.body;
+    if (!validateChannelName(name)) {
+      return res.status(400).json({ error: 'Invalid channel name' });
+    }
+    if (!Array.isArray(muds) || muds.length > 500 || !muds.every(mud => typeof mud === 'string')) {
+      return res.status(400).json({ error: 'muds must be a list of MUD names' });
+    }
+    const actor = typeof by === 'string' && by.trim() ? by.trim().slice(0, 64) : 'admin';
+    const result = await channelAccess.restrict(name, muds, actor, req.ip ?? 'unknown');
+    res.json({ channel: name.toLowerCase(), ...result });
+  } catch (error) {
+    logger.error('Error restricting channel:', error);
+    res.status(500).json({ error: 'Failed to restrict channel' });
+  }
+});
+
+router.delete('/admin/channels/:name', authRateLimit, requireAdmin, async (req, res) => {
+  try {
+    const by = req.get('x-admin-name')?.slice(0, 64) || 'admin';
+    const { removed, saved } = await channelAccess.open(req.params.name, by, req.ip ?? 'unknown');
+    if (!removed) {
+      return res.status(404).json({ error: 'That channel is not restricted' });
+    }
+    res.json({ opened: true, saved });
+  } catch (error) {
+    logger.error('Error opening channel:', error);
+    res.status(500).json({ error: 'Failed to open channel' });
   }
 });
 
